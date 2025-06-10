@@ -48,8 +48,14 @@ class DataLoader:
         end = start + self.batch_size
         batch_indices = self.indices[start:end]
         
-        batch_data = jnp.expand_dims(self.data[batch_indices], axis=0)
-        batch_labels = jnp.expand_dims(self.labels[batch_indices], axis=0)
+        batch_data = self.data[batch_indices]
+        batch_labels = self.labels[batch_indices]
+        #GESTIRE CASI IN CUI VENGONO FORME (batch_size,) ANZICHè (batch_size, 1)
+        #FORSE COSI:
+        if batch_data.ndim == 1:
+            batch_data = batch_data[:, None]
+        if batch_labels.ndim == 1:
+            batch_labels = batch_labels[:, None] #CONTROLLARE TUTTO CIO
         
         self._current_idx += self.batch_size
         return batch_data, batch_labels
