@@ -1,8 +1,8 @@
-# PARE CHE DOBBIAMO CREARCI UN PO TUTTO, DUNQUE: (POI SISTEMEREMO TUTTO IN FILE ORGANIZZATI BENE)
+.# File: utils.py
+# This file contains utility functions and classes for JAX-based machine learning tasks.
 
 import jax
 import jax.numpy as jnp
-from flax import linen as nn
 
 class DataLoader:
     """
@@ -25,15 +25,15 @@ class DataLoader:
         self.labels = jnp.array(labels).squeeze()
         self.batch_size = batch_size
         self.shuffle = shuffle
-        self.seed = seed
+        self.key = jax.random.key(seed)
         self.n_samples = self.data.shape[0]
         self._reset_indices()
     
     def _reset_indices(self):
         self.indices = jnp.arange(self.n_samples)
         if self.shuffle:
-            key = jax.random.PRNGKey(self.seed)
-            self.indices = jax.random.permutation(key, self.indices)
+            self.key, subkey = jax.random.split(self.key) 
+            self.indices = jax.random.permutation(subkey, self.indices)
     
     def __iter__(self):
         self._current_idx = 0
@@ -50,12 +50,11 @@ class DataLoader:
         
         batch_data = self.data[batch_indices]
         batch_labels = self.labels[batch_indices]
-        #GESTIRE CASI IN CUI VENGONO FORME (batch_size,) ANZICHè (batch_size, 1)
-        #FORSE COSI:
+
         if batch_data.ndim == 1:
             batch_data = batch_data[:, None]
         if batch_labels.ndim == 1:
-            batch_labels = batch_labels[:, None] #CONTROLLARE TUTTO CIO
+            batch_labels = batch_labels[:, None]
         
         self._current_idx += self.batch_size
         return batch_data, batch_labels
@@ -63,23 +62,3 @@ class DataLoader:
     def __len__(self):
         """Return the number of batches."""
         return (self.n_samples + self.batch_size - 1) // self.batch_size
-
-
-class MLP(nn.Module):
-    """
-    Author: RICCARDO ROTA, ASSOLUTAMENTE LEONARDO BOCCHIERI NON HA CONTRIBUITO.
-    """
-    # attributi che vengono inizializzati nell'init di nn.Module, quindi andranno passati in input quando inizializziamo il modello, 
-    # tipo model = MLP(output_dim=1, hidden_dim=8, num_hidden_layers=2), oppure semplicemente MLP() perchè ho messo default
-    output_dim: int = 1
-    hidden_dim: int = 8
-    num_hidden_layers: int = 2
-
-    @nn.compact
-    def __call__(self, x):
-        for _ in range(self.num_hidden_layers):
-            x = nn.Dense(self.hidden_dim)(x) # strato dense (fully connected), capisce la dimensione dell'input 
-                                             # da solo, gli dobbiamo specificare quella dell'output
-            x = nn.relu(x) # vedi di capire da solo cos'è questo
-        x = nn.Dense(self.output_dim)(x) 
-        return x
