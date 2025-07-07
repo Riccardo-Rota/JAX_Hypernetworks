@@ -1,4 +1,4 @@
-.# File: utils.py
+# File: utils.py
 # This file contains utility functions and classes for JAX-based machine learning tasks.
 
 import jax
