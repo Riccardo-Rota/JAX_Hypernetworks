@@ -3,6 +3,9 @@
 
 import jax
 import jax.numpy as jnp
+from flax import nnx
+from flax.nnx.training.metrics import Metric, Average
+import optax
 
 class DataLoader:
     """
@@ -62,3 +65,104 @@ class DataLoader:
     def __len__(self):
         """Return the number of batches."""
         return (self.n_samples + self.batch_size - 1) // self.batch_size
+    
+
+class MLP(nnx.Module):
+    def __init__(self, input_dim: int, output_dim: int, hidden_dim: int, num_hidden_layers: int, *, rngs: nnx.Rngs):
+        
+        self.num_hidden_layers = num_hidden_layers
+        
+        layers = []
+        
+        if num_hidden_layers > 0:
+            # First hidden layer
+            layers.append(nnx.Linear(input_dim, hidden_dim, rngs=rngs))
+            layers.append(nnx.relu)
+            
+            # Additional hidden layers
+            for _ in range(num_hidden_layers - 1):
+                layers.append(nnx.Linear(hidden_dim, hidden_dim, rngs=rngs))
+                layers.append(nnx.relu)
+                
+            # Output layer
+            layers.append(nnx.Linear(hidden_dim, output_dim, rngs=rngs))
+
+        else:
+            # Direct input to output
+            layers.append(nnx.Linear(input_dim, output_dim, rngs=rngs))
+            
+        # Store in sequential container
+        self.layers = nnx.Sequential(*layers)
+        
+    def __call__(self, x: jax.Array):
+        return self.layers(x)
+    
+
+@nnx.jit
+@nnx.vmap
+def apply(network, parameters, x):
+    """
+    Assigns the parameters from an array to the state. state and parameters must be batched with the same first dimension.
+    """
+    parameters = parameters.squeeze()
+    graphdef, state = nnx.split(network)
+    flat_state = nnx.to_flat_state(state)
+
+    # TODO: Check if the number of parameters matches
+    
+    i = 0
+    for key, param in flat_state:
+        param_size = param.value.size
+        # Extract parameters for this specific parameter
+        param_values = parameters[i:i + param_size]
+        # Reshape to match the original parameter shape
+        param.value = param_values.reshape(param.value.shape)
+        i += param_size
+
+    modified_network = nnx.merge(graphdef, state)
+
+    return modified_network(x)
+
+
+def train_step(hypernetwork, targetnetwork_fun, hyperparams, x, y, optimizer, batch_size):
+    """
+    Performs a single training step."""
+    def loss_fn(hypernetwork, hyperparams, x, y, batch_size):
+        w = hypernetwork(hyperparams)
+
+        @nnx.split_rngs(splits=x.shape[0])
+        @nnx.vmap(in_axes=(0, None), out_axes=0)
+        def make_model(rngs, targetnetwork_fun):
+            return targetnetwork_fun(1, 1, 8, 1, rngs=rngs)
+        
+        targetnetwork = make_model(nnx.Rngs(0), targetnetwork_fun)
+
+        pred = apply(targetnetwork, w, x)
+        loss = jnp.mean(optax.l2_loss(pred, y))
+        return loss
+    loss, grads = nnx.value_and_grad(loss_fn)(hypernetwork, hyperparams, x, y, batch_size)
+    optimizer.update(grads)
+    return loss
+
+train_step = nnx.jit(train_step, static_argnames=('targetnetwork_fun','batch_size'))
+
+def evaluation_step(hypernetwork, targetnetwork_fun, hyperparams, x, y, batch_size):
+    """
+    Performs a single training step."""
+    def loss_fn(hypernetwork, hyperparams, x, y, batch_size):
+        w = hypernetwork(hyperparams)
+
+        @nnx.split_rngs(splits=batch_size)
+        @nnx.vmap(in_axes=(0, None), out_axes=0)
+        def make_model(rngs, targetnetwork_fun):
+            return targetnetwork_fun(1, 1, 8, 1, rngs=rngs)
+        
+        targetnetwork = make_model(nnx.Rngs(0), targetnetwork_fun)
+        
+        pred = apply(targetnetwork, w, x)
+        loss = jnp.mean(optax.l2_loss(pred, y))
+        return loss
+    loss = loss_fn(hypernetwork, hyperparams, x, y, batch_size)
+    return loss
+
+evaluation_step = nnx.jit(evaluation_step, static_argnames=('targetnetwork_fun','batch_size'))
