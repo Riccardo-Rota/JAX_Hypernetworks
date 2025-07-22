@@ -98,6 +98,45 @@ class MLP(nnx.Module):
         return self.layers(x)
     
 
+# New trial: hidden layers with different lengths DA SISTEMARE
+class MLP_trial(nnx.Module):
+    def __init__(self, input_dim: int, output_dim: int, hidden_dim1: int, hidden_dim2: int, num_hidden_layers1: int, num_hidden_layers2: int, *, rngs: nnx.Rngs):
+        
+        self.num_hidden_layers = num_hidden_layers1
+        self.num_hidden_layers2 = num_hidden_layers2
+        
+        layers = []
+        
+        if num_hidden_layers1 > 0:
+            # First hidden layer
+            layers.append(nnx.Linear(input_dim, hidden_dim1, rngs=rngs))
+            layers.append(nnx.relu)
+            
+            # Additional hidden layers
+            for _ in range(num_hidden_layers1 - 1):
+                layers.append(nnx.Linear(hidden_dim1, hidden_dim1, rngs=rngs))
+                layers.append(nnx.relu)
+        
+        if num_hidden_layers2 > 0:
+            # First hidden layer
+            layers.append(nnx.Linear(hidden_dim1, hidden_dim2, rngs=rngs))
+            layers.append(nnx.relu)
+            
+            # Additional hidden layers
+            for _ in range(num_hidden_layers2 - 1):
+                layers.append(nnx.Linear(hidden_dim2, hidden_dim2, rngs=rngs))
+                layers.append(nnx.relu)
+        
+            # Output layer
+            layers.append(nnx.Linear(hidden_dim2, output_dim, rngs=rngs))
+            
+        # Store in sequential container
+        self.layers = nnx.Sequential(*layers)
+        
+    def __call__(self, x: jax.Array):
+        return self.layers(x)
+    
+
 @nnx.jit
 @nnx.vmap
 def apply(network, parameters, x):
@@ -133,12 +172,15 @@ def train_step(hypernetwork, targetnetwork_fun, hyperparams, x, y, optimizer, ba
         @nnx.split_rngs(splits=x.shape[0])
         @nnx.vmap(in_axes=(0, None), out_axes=0)
         def make_model(rngs, targetnetwork_fun):
-            return targetnetwork_fun(1, 1, 8, 1, rngs=rngs)
+            return targetnetwork_fun(1, 1, 8, 2, rngs=rngs)
         
         targetnetwork = make_model(nnx.Rngs(0), targetnetwork_fun)
 
         pred = apply(targetnetwork, w, x)
         loss = jnp.mean(optax.l2_loss(pred, y))
+        #eps = 1e-8  # Small epsilon to avoid division by zero
+        #relative_errors = (pred - y) / (y + eps)
+        #loss = jnp.sqrt(jnp.mean(relative_errors ** 2))
         return loss
     loss, grads = nnx.value_and_grad(loss_fn)(hypernetwork, hyperparams, x, y, batch_size)
     optimizer.update(grads)
@@ -155,12 +197,15 @@ def evaluation_step(hypernetwork, targetnetwork_fun, hyperparams, x, y, batch_si
         @nnx.split_rngs(splits=batch_size)
         @nnx.vmap(in_axes=(0, None), out_axes=0)
         def make_model(rngs, targetnetwork_fun):
-            return targetnetwork_fun(1, 1, 8, 1, rngs=rngs)
+            return targetnetwork_fun(1, 1, 8, 2, rngs=rngs)
         
         targetnetwork = make_model(nnx.Rngs(0), targetnetwork_fun)
         
         pred = apply(targetnetwork, w, x)
         loss = jnp.mean(optax.l2_loss(pred, y))
+        #eps = 1e-8  # Small epsilon to avoid division by zero
+        #relative_errors = (pred - y) / (y + eps)
+        #loss = jnp.sqrt(jnp.mean(relative_errors ** 2))
         return loss
     loss = loss_fn(hypernetwork, hyperparams, x, y, batch_size)
     return loss
