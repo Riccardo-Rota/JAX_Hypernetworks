@@ -6,6 +6,7 @@ import jax.numpy as jnp
 from flax import nnx
 from flax.nnx.training.metrics import Metric, Average
 import optax
+import jax.random as random
 
 class DataLoader:
     """
@@ -211,3 +212,15 @@ def evaluation_step(hypernetwork, targetnetwork_fun, hyperparams, x, y, batch_si
     return loss
 
 evaluation_step = nnx.jit(evaluation_step, static_argnames=('targetnetwork_fun','batch_size'))
+
+def variables_generator(N: int, domains: list, key: random.PRNGKey = random.key(0)) -> list:
+    """
+    Generates N random variables from the specified domains.
+    Each domain is a tuple (min, max) representing the range of the variable.
+    """
+    variables = []
+    for domain in domains:
+        key, subkey = random.split(key)
+        var = random.uniform(subkey, (N,), minval=domain[0], maxval=domain[1])
+        variables.append(var)
+    return variables
