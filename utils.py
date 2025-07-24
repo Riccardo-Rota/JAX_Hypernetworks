@@ -163,6 +163,20 @@ def apply(network, parameters, x):
 
     return modified_network(x)
 
+def compute_rrmse(predictions, targets, epsilon=1e-8):
+    """
+    Computes RRMSE for the predictions and targets. Epsilon to avoid division by zero
+    """
+    relative_errors = (predictions - targets) / (jnp.abs(targets) + epsilon)
+    rrmse = jnp.sqrt(jnp.mean(relative_errors ** 2))
+    return rrmse
+
+def compute_rrmse_alt1(predictions, targets, epsilon=1e-8):
+    """Alternative that uses target magnitude for normalization."""
+    target_magnitude = jnp.sqrt(jnp.mean(targets ** 2)) + epsilon
+    rmse = jnp.sqrt(jnp.mean((predictions - targets) ** 2))
+    rrmse = rmse / target_magnitude
+    return rrmse
 
 def train_step(hypernetwork, targetnetwork_fun, hyperparams, x, y, optimizer, batch_size):
     """
@@ -179,13 +193,11 @@ def train_step(hypernetwork, targetnetwork_fun, hyperparams, x, y, optimizer, ba
 
         pred = apply(targetnetwork, w, x)
         loss = jnp.mean(optax.l2_loss(pred, y))
-        #eps = 1e-8  # Small epsilon to avoid division by zero
-        #relative_errors = (pred - y) / (y + eps)
-        #loss = jnp.sqrt(jnp.mean(relative_errors ** 2))
-        return loss
-    loss, grads = nnx.value_and_grad(loss_fn)(hypernetwork, hyperparams, x, y, batch_size)
+        return loss, pred
+    (loss, pred), grads = nnx.value_and_grad(loss_fn, has_aux=True)(hypernetwork, hyperparams, x, y, batch_size)
     optimizer.update(grads)
-    return loss
+    rrmse = compute_rrmse_alt1(pred, y)
+    return loss, rrmse
 
 train_step = nnx.jit(train_step, static_argnames=('targetnetwork_fun','batch_size'))
 
@@ -205,11 +217,12 @@ def evaluation_step(hypernetwork, targetnetwork_fun, hyperparams, x, y, batch_si
         pred = apply(targetnetwork, w, x)
         loss = jnp.mean(optax.l2_loss(pred, y))
         #eps = 1e-8  # Small epsilon to avoid division by zero
-        #relative_errors = (pred - y) / (y + eps)
+        #relative_errors = (pred - y) / (jnp.abs(y) + eps)
         #loss = jnp.sqrt(jnp.mean(relative_errors ** 2))
-        return loss
-    loss = loss_fn(hypernetwork, hyperparams, x, y, batch_size)
-    return loss
+        return loss, pred
+    loss, pred = loss_fn(hypernetwork, hyperparams, x, y, batch_size)
+    rrmse = compute_rrmse_alt1(pred, y)
+    return loss, rrmse
 
 evaluation_step = nnx.jit(evaluation_step, static_argnames=('targetnetwork_fun','batch_size'))
 
