@@ -211,7 +211,7 @@ def evaluation_step(hypernetwork, targetnetwork_fun, hyperparams, x, y, batch_si
         @nnx.vmap(in_axes=(0, None), out_axes=0)
         def make_model(rngs, targetnetwork_fun):
             return targetnetwork_fun(1, 1, 8, 2, rngs=rngs)
-        
+
         targetnetwork = make_model(nnx.Rngs(0), targetnetwork_fun)
         
         pred = apply(targetnetwork, w, x)
