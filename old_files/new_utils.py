@@ -193,7 +193,7 @@ def compute_rrmse_alt1(predictions, targets, epsilon=1e-8):
     return rrmse
 
 @nnx.jit
-@nnx.vmap(in_axes=(None, 0), out_axes=0)
+#@nnx.vmap(in_axes=(None, 0), out_axes=0) mi sembra più comodo tenere come base la funzione senza vmap, e poi usare nnx.vmap quando serve
 def build_state_from_parameters(template_state: nnx.statelib.State, parameters: jax.Array) -> nnx.statelib.State:
     """
     Builds a state from the parameters, reshaping them according to the template state.
@@ -210,8 +210,6 @@ def build_state_from_parameters(template_state: nnx.statelib.State, parameters: 
     for _, param in nnx.to_flat_state(template_state):
         shapes.append(param.value.shape)
         sizes.append(param.value.size)
-    print(f"Shapes: {shapes}, Sizes: {sizes}")
-    print(f"Parameters: {parameters.shape}")
     i = 0
     for shape, size in zip(shapes, sizes):
         reshaped_parameters.append(parameters[i:i+size].reshape(shape))
@@ -243,7 +241,7 @@ def train_step(
     def compute_loss(hypernetwork, hypervariables, x, y):
         w = hypernetwork(hypervariables)
         graphdef, template_state = nnx.split(targetnetwork)
-        state = build_state_from_parameters(template_state, w)
+        state = nnx.vmap(build_state_from_parameters, in_axes=(None, 0), out_axes=0)(template_state, w)
         modified_targetnetwork = nnx.merge(graphdef, state)
         
         pred = nnx.vmap(type(modified_targetnetwork).__call__)(modified_targetnetwork, x)
@@ -283,7 +281,7 @@ def evaluation_step(
     def compute_loss(hypernetwork, hypervariables, x, y):
         w = hypernetwork(hypervariables)
         graphdef, template_state = nnx.split(targetnetwork)
-        state = build_state_from_parameters(template_state, w)
+        state = nnx.vmap(build_state_from_parameters, in_axes=(None, 0), out_axes=0)(template_state, w)
         modified_targetnetwork = nnx.merge(graphdef, state) 
         pred = nnx.vmap(type(modified_targetnetwork).__call__)(modified_targetnetwork, x)
         loss = jnp.mean(criterion(pred, y))
@@ -311,7 +309,6 @@ def assign_parameters(model: nnx.Module, parameters: jax.Array) -> nnx.Module:
 
 
 @nnx.jit
-@nnx.vmap(in_axes=(None, 0, 0), out_axes=0)
 def apply(model, parameters, x):
     """
     Applies the model to the input data using the specified parameters.
@@ -322,8 +319,7 @@ def apply(model, parameters, x):
     Returns:
         jax.Array: The output of the model after applying it to the input data.
     """
-    #TODO
-    raise NotImplementedError("This function is not implemented yet.")
+    return assign_parameters(model, parameters)(x)
 
 
 def variables_generator(N: int, domains: list, key: random.PRNGKey = random.key(0)) -> list:

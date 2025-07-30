@@ -311,9 +311,31 @@ def train_step(hypernetwork, targetnetwork_fun, hyperparams, x, y, optimizer, ba
 
 train_step = nnx.jit(train_step, static_argnames=('targetnetwork_fun','batch_size'))
 
-def evaluation_step(hypernetwork, targetnetwork_fun, hyperparams, x, y, batch_size):
+def train_step_2(hypernetwork, targetnetwork_fun, hyperparams, x, y, optimizer, batch_size):
     """
     Performs a single training step."""
+    def loss_fn(hypernetwork, hyperparams, x, y, batch_size):
+        w = hypernetwork(hyperparams)
+
+        @nnx.vmap(in_axes=(0, None), out_axes=0)
+        def make_model(_):
+            return targetnetwork_fun(1,1,8,2)
+
+        targetnetwork_batched = make_model(jnp.arange(x.shape[0]))
+
+        pred = apply(targetnetwork_batched, w, x)
+        loss = jnp.mean(optax.l2_loss(pred, y))
+        return loss, pred
+    (loss, pred), grads = nnx.value_and_grad(loss_fn, has_aux=True)(hypernetwork, hyperparams, x, y, batch_size)
+    optimizer.update(grads)
+    rrmse = compute_rrmse_alt1(pred, y)
+    return loss, rrmse
+
+train_step_2 = nnx.jit(train_step_2, static_argnames=('batch_size'))
+
+def evaluation_step(hypernetwork, targetnetwork_fun, hyperparams, x, y, batch_size):
+    """
+    Performs a single evaluation step."""
     def loss_fn(hypernetwork, hyperparams, x, y, batch_size):
         w = hypernetwork(hyperparams)
 
@@ -335,6 +357,31 @@ def evaluation_step(hypernetwork, targetnetwork_fun, hyperparams, x, y, batch_si
     return loss, rrmse
 
 evaluation_step = nnx.jit(evaluation_step, static_argnames=('targetnetwork_fun','batch_size'))
+
+
+def evaluation_step_2(hypernetwork, targetnetwork_fun, hyperparams, x, y, batch_size):
+    """
+    Performs a single evaluation step."""
+    def loss_fn(hypernetwork, hyperparams, x, y, batch_size):
+        w = hypernetwork(hyperparams)
+
+        @nnx.vmap(in_axes=(0, None), out_axes=0)
+        def make_model(_):
+            return targetnetwork_fun(1,1,8,2)
+
+        targetnetwork_batched = make_model(jnp.arange(x.shape[0]))
+        
+        pred = apply(targetnetwork_batched, w, x)
+        loss = jnp.mean(optax.l2_loss(pred, y))
+        #eps = 1e-8  # Small epsilon to avoid division by zero
+        #relative_errors = (pred - y) / (jnp.abs(y) + eps)
+        #loss = jnp.sqrt(jnp.mean(relative_errors ** 2))
+        return loss, pred
+    loss, pred = loss_fn(hypernetwork, hyperparams, x, y, batch_size)
+    rrmse = compute_rrmse_alt1(pred, y)
+    return loss, rrmse
+
+evaluation_step_2 = nnx.jit(evaluation_step_2, static_argnames=('batch_size'))
 
 def variables_generator(N: int, domains: list, key: random.PRNGKey = random.key(0)) -> list:
     """
