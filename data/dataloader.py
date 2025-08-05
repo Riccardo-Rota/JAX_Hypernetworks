@@ -8,7 +8,7 @@ class DataLoader:
     When iterating, batches of data and labels are returned as arrays with an additional dimension.
     """
 
-    def __init__(self, data, labels, batch_size=32, shuffle=True, seed=0):
+    def __init__(self, data, labels, batch_size=256, shuffle=True, seed=0):
         """
         Initialize the DataLoader.
         Parameters:
