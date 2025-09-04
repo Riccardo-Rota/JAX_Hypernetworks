@@ -22,3 +22,10 @@ class EarlyStopping:
             self.counter += 1
             if self.counter >= self.patience:
                 self.should_stop = True
+
+    def reset(self):
+        self.best_loss = float('inf')
+        self.best_epoch = 0
+        self.best_model = None
+        self.counter = 0
+        self.should_stop = False
