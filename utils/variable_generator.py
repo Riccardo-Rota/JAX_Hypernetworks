@@ -1,6 +1,7 @@
 from jax import random
 from typing import Optional
 
+#TODO: edit to be consistent with new dataloader
 def variables_generator_beta(N: int, domains: list, key: random.PRNGKey = random.key(0)) -> list:
     """
     Generates N random samples of an arbitrary number of variables from the specified domains.

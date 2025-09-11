@@ -46,6 +46,7 @@ class JaxDataset:
     def __len__(self) -> int:
         return self.length
     
+    #TODO: control if get_item should return a tuplet (il vocab esterno è da far diventare tupla)
     def __getitem__(self, idx: int) -> Dict[str, Dict[str, jax.Array]]:
         out = {}
         for name, group in (("vars", self.vars), ("hypervars", self.hypervars), ("labels", self.labels)):
@@ -97,7 +98,8 @@ class JaxDataLoader:
         
         batch_indices = self._indices[start:end]
         
-        # TODO: discuss if dictionary of dictionaries is okay
+        # TODO: discuss if dictionary of dictionaries is okay (change in tuplet of dictionaries)
+        #TODO: understand where to put batch size
         batch_data = {
             "vars": {k: v[batch_indices] for k, v in self.dataset.vars.items()},
             "hypervars": {k: v[batch_indices] for k, v in self.dataset.hypervars.items()},
