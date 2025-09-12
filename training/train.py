@@ -19,6 +19,9 @@ def train_step( #TODO: GESTIRE IL CASO IN CUI LA TUPLA METRICS CONTENGA UN SOLO 
     metrics: Tuple[Callable, ...] = (),
     evaluation: bool = False,
 ):
+    """
+    TODO: commentare
+    """
     def compute_loss_and_metrics(hypernetwork, hypervariables, x, y):
         w = hypernetwork(hypervariables)
         graphdef, template_state = nnx.split(targetnetwork)
@@ -39,9 +42,9 @@ def train_step( #TODO: GESTIRE IL CASO IN CUI LA TUPLA METRICS CONTENGA UN SOLO 
 
     return loss, metrics_vals
 
-train_step = nnx.jit(train_step, static_argnames=("criterion", "metrics", "evaluation"))
+train_step = nnx.jit(train_step, static_argnames=("criterion", "metrics", "evaluation")) #QUESTION: Each time we change evaluation to false, does the compliler overwrite the function or not?
 
-
+#TODO: cambiare in base alla nuova implementazione del dataloader
 def train_epoch(
         hypernetwork: nnx.Module,
         targetnetwork: nnx.Module,
@@ -72,7 +75,7 @@ def train_epoch(
             metrics_dict[metric.__name__] = metric.__name__
 
     training_metrics = MultiMetric(**{k: Average(argname=k) for k in metrics_dict})
-    validation_metrics = MultiMetric(**{k: Average(argname=k) for k in metrics_dict})
+    validation_metrics = MultiMetric(**{k: Average(argname=k) for k in metrics_dict}) #TODO: controllare se funziona
 
     for data, label in train_loader:
         hypervariables = data[:, :-1] # mu, l, k TODO: SOSTITUIRE CON UN DIZIONARIO UNA VOLTA IMPLEMENTATO UN DATALOADER
@@ -95,7 +98,7 @@ def train_epoch(
                 validation_results[metrics[m].__name__] = val_metrics[m]
         validation_metrics.update(**validation_results)
     return training_metrics, validation_metrics
-
+# TODO: provare a jittare anche questa funzione, vedere se conviene
 
 def train_and_evaluate(
         hypernetwork: nnx.Module,
