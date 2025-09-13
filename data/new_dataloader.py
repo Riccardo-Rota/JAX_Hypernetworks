@@ -6,52 +6,36 @@ from typing import Any, Dict, Optional, Sequence, Union
 ArrayLike = Union[np.ndarray, jax.Array]
 
 
-class JaxDataset:
-    """Dataset container for variables, hypervariables, and labels. Data are stored as dictionaries of JAX arrays,
-       where each value of the dictionary should be a full dataset array (not a single sample)."""
+class Dataset:
+    """Dataset container for variables, hypervariables, and labels. Data are stored in a dictionary, divided in
+       "hypervariables", "variables" and "labels". Data are kept as numpy arrays, to avoid unnecessary copies. Data are then
+       converted to jax.Arrays by the DataLoader."""
 
     def __init__(self,
-                 vars: Union[ArrayLike, Dict[str, ArrayLike]],
-                 hypervars: Union[ArrayLike, Dict[str, ArrayLike]],
-                 labels: Union[ArrayLike, Dict[str, ArrayLike]],
+                 vars: ArrayLike,
+                 hypervars: ArrayLike,
+                 labels: ArrayLike,
                  ):
         
-        # Convert inputs to dicts of jax arrays
-        self.vars = _convert_to_jax_dict(vars, "vars")
-        self.hypervars = _convert_to_jax_dict(hypervars, "hypervars")
-        self.labels = _convert_to_jax_dict(labels, "labels")
+        # Convert inputs to dicts of jax arrays (asarray do not force-copy if the input is already a jax array)
+        self.vars = np.asarray(vars)
+        self.hypervars = np.asarray(hypervars)
+        self.labels =  np.asarray(labels)
+        self.length = self.vars.shape[0]
 
-        self.length = self._compute_length()
-        self._check_length_consistency()
-
-
-    def _convert_to_jax_dict(field: Union[ArrayLike, Dict[str, ArrayLike]], name: str) -> Dict[str, jax.Array]:
-        """Convert input field to a dict of jax arrays."""
-        if isinstance(field, dict):
-            return {k: jnp.asarray(v) for k, v in field.items()}
-        else:
-            return {f"{name}_0": jnp.asarray(field)}
-        
-    def _compute_length(self) -> int:
-        """Compute the length of the dataset."""
-        return self.vars.value.shape[0]
-    
-    # TODO: check that slow the computation, decide what to do
-    def _check_length_consistency(self) -> None:
-        for group_name, group in (("vars", self.vars), ("hypervars", self.hypervars), ("labels", self.labels)):
-            for k, v in group.items():
-                if v.shape[0] != self.length:
-                    raise ValueError(f"Mismatched leading dimension for {group_name}.{k}")
+        # Check dataset dimensionality consistency
+        assert self.hypervars.shape[0] == self.length, "Mismatched leading dimension for hypervars"
+        assert self.labels.shape[0] == self.length, "Mismatched leading dimension for labels"        
     
     def __len__(self) -> int:
         return self.length
     
-    #TODO: control if get_item should return a tuplet (il vocab esterno è da far diventare tupla)
-    def __getitem__(self, idx: int) -> Dict[str, Dict[str, jax.Array]]:
-        out = {}
-        for name, group in (("vars", self.vars), ("hypervars", self.hypervars), ("labels", self.labels)):
-            out[name] = {k: v[idx] for k, v in group.items()}
-        return out
+    def __getitem__(self, idx: Union[int, ArrayLike]) -> Dict[str, jax.Array]:
+        return {
+            "hypervars": self.hypervars[idx],
+            "vars": self.vars[idx],
+            "labels": self.labels[idx],
+        }
 
 class JaxDataLoader:
     """
@@ -59,7 +43,7 @@ class JaxDataLoader:
     """
 
     def __init__(self,
-                 dataset: JaxDataset,
+                 dataset: Dataset,
                  batch_size: int = 256,
                  shuffle: bool = True,
                  drop_last: bool = False,
@@ -98,13 +82,7 @@ class JaxDataLoader:
         
         batch_indices = self._indices[start:end]
         
-        # TODO: discuss if dictionary of dictionaries is okay (change in tuplet of dictionaries)
-        #TODO: understand where to put batch size
-        batch_data = {
-            "vars": {k: v[batch_indices] for k, v in self.dataset.vars.items()},
-            "hypervars": {k: v[batch_indices] for k, v in self.dataset.hypervars.items()},
-            "labels": {k: v[batch_indices] for k, v in self.dataset.labels.items()},
-        }
+        batch_data = {k: jnp.asarray(v) for k,v in self.dataset[batch_indices].items()}
         
         self._current_idx += self.batch_size
         return batch_data
