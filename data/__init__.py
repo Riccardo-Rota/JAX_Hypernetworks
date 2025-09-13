@@ -1,4 +1,4 @@
 from .dataloader import DataLoader
-from .new_dataloader import JaxDataset, JaxDataLoader
+from .new_dataloader import Dataset, JaxDataLoader
 
-__all__ = ['DataLoader', 'JaxDataset', 'JaxDataLoader']
+__all__ = ['DataLoader', 'Dataset', 'JaxDataLoader']
