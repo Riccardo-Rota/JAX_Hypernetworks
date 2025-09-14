@@ -1,4 +1,4 @@
-from .train import train_step
+from .train import train_step, train_epoch, train_and_evaluate, compute_metrics
 from .hypernet_utils import build_state_from_parameters, assign_parameters, apply
 from .early_stopping import EarlyStopping
 
@@ -9,5 +9,6 @@ __all__ = [
     'build_state_from_parameters',
     'assign_parameters',
     'apply',
-    'EarlyStopping'
+    'EarlyStopping',
+    'compute_metrics',
 ]
