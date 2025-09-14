@@ -9,6 +9,8 @@ from data import DataLoader
 from tqdm import tqdm
 import inspect
 from utils import to_tuple
+from .early_stopping import EarlyStopping
+from datetime import datetime
 
 #TODO: controllare tutti i tipi e i docstring
 
@@ -85,8 +87,8 @@ def train_epoch(
         loss_name = 'loss'
         metrics_names = [m.__name__ for m in metrics]
 
-    training_metrics = MultiMetric(**{k: Average(argname=k) for k in metrics_names})
-    validation_metrics = MultiMetric(**{k: Average(argname=k) for k in metrics_names})
+    training_metrics = MultiMetric(**{k: Average(argname=k) for k in [loss_name] + metrics_names})
+    validation_metrics = MultiMetric(**{k: Average(argname=k) for k in [loss_name] + metrics_names})
 
     for data, label in train_loader:
         hypervariables = data[:, :-1] # mu, l, k TODO: SOSTITUIRE CON UN DIZIONARIO UNA VOLTA IMPLEMENTATO UN DATALOADER
@@ -119,6 +121,9 @@ def train_and_evaluate(
         num_epochs: int,
         criterion: Callable = optax.l2_loss,
         metrics: Union[List[Callable], Tuple[Callable, ...], None] = None,
+        early_stopping: Optional[EarlyStopping] = None,
+        early_stopping_metric: Optional[Union[str, int]] = None,
+        log_file_path: Optional[str] = None,
         ) -> tuple:
     """
     Trains and evaluates the model for a specified number of epochs.
@@ -131,30 +136,68 @@ def train_and_evaluate(
         optimizer (nnx.Optimizer): Optimizer used to update the hypernetwork parameters.
         num_epochs (int): Number of epochs to train and evaluate.
         criterion (Callable): Function used to compute the loss. It must take as inputs the predictions and targets. Default: optax.l2_loss.
+        metrics (Union[List[Callable], Tuple[Callable, ...], None]): Metrics to compute during training and evaluation. Default: None.
+        early_stopping (Optional[EarlyStopping]): Early stopping callback to stop training when a metric stops improving. Default: None.
+        early_stopping_metric (Optional[Union[str, int]]): Metric to monitor for early stopping. Can be a string (metric name) or an integer (metric index). Default: None (first metric).
+        log_to_file (bool): If True, logs training and validation metrics to a file. Default: False.
     Returns:
         history (dict): A dictionary containing training and validation losses for each epoch.
     """
+
     history = {'train_metrics': [], 'val_metrics': []}
     metrics = to_tuple(metrics)
+    if log_file_path:
+        with open(log_file_path, "w") as f:
+            f.write(f"Training Log - Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
     pbar = tqdm(range(num_epochs))
     for epoch in pbar:
         train_metrics, val_metrics = train_epoch(hypernetwork, targetnetwork, train_loader, val_loader, optimizer, criterion, metrics)
         history['train_metrics'].append(train_metrics.compute())
         history['val_metrics'].append(val_metrics.compute())
-        pbar.set_description(
-            f"Epoch {epoch+1}/{num_epochs} - "
-            f"Train: {', '.join(f'{k}: {v.item():.4f}' for k,v in train_metrics.compute().items())} - "
-            f"Val: {', '.join(f'{k}: {v.item():.4f}' for k,v in val_metrics.compute().items())}"
-        )
-        # TODO: stampare log su file contenente i valori di tutte le metriche del train e del val
-        # with open("training_log.txt", "a") as f:
-        #     f.write(f"Epoch {epoch+1}/{num_epochs} - Train Metrics: {train_metrics} - Val Metrics: {val_metrics}\n")
-        # TODO: aggiungere scheduler e early stopping
-        # TODO: salvare il modello con i pesi migliori sul val
-        # TODO: controllare se funziona il tutto (probabilmente no)
+        log_compact = f"Epoch {epoch+1}/{num_epochs} - " + \
+              f"Train: {', '.join(f'{k}: {v.item():.4f}' for k,v in train_metrics.compute().items())} - " + \
+              f"Val: {', '.join(f'{k}: {v.item():.4f}' for k,v in val_metrics.compute().items())}"
+        log_detail = f"Epoch {epoch+1}/{num_epochs} - " + \
+              f"Train: {', '.join(f'{k}: {v.item():.8f}' for k,v in train_metrics.compute().items())} - " + \
+              f"Val: {', '.join(f'{k}: {v.item():.8f}' for k,v in val_metrics.compute().items())}"
+        pbar.set_description(log_compact)
 
+        if log_file_path:
+            with open(log_file_path, "a") as f:
+                f.write(log_detail + "\n")
+
+        if early_stopping:
+            if isinstance(early_stopping_metric, str):
+                if early_stopping_metric not in val_metrics.compute():
+                    raise ValueError(f"Metric for early stopping '{early_stopping_metric}' not found in validation metrics.")
+                metric_index = list(val_metrics.compute().keys()).index(early_stopping_metric)
+            elif isinstance(early_stopping_metric, int):
+                if early_stopping_metric < 0 or early_stopping_metric >= len(val_metrics.compute()):
+                    raise ValueError(f"Metric index for early stopping '{early_stopping_metric}' is out of range.")
+                metric_index = early_stopping_metric
+            else:
+                metric_index = 0
+
+            early_stopping(current_loss = list(val_metrics.compute().values())[metric_index], 
+                           current_model = hypernetwork, 
+                           current_epoch = epoch)
+            if early_stopping.should_stop:
+                print(f"Early stopping at epoch {epoch+1}. Best epoch was {early_stopping.best_epoch+1} with loss {early_stopping.best_loss:.8f}.")
+                if log_file_path:
+                    with open(log_file_path, "a") as f:
+                        f.write(f"Early stopping at epoch {epoch+1}. Best epoch was {early_stopping.best_epoch+1} with loss {early_stopping.best_loss:.8f}.\n")
+                if early_stopping.best_model:
+                    hypernetwork = early_stopping.best_model
+                break
+
+    if log_file_path:
+        with open(log_file_path, "a") as f:
+            f.write(f"Training Log - End time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+
+    # TODO: sistemare il plateau scheduler
     return history
+
 
 def compute_metrics(metric: Callable, preds: jax.Array, targets: jax.Array, weights: jax.Array) -> jax.Array:
     """
