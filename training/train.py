@@ -5,7 +5,7 @@ from flax.nnx.training.metrics import Average, MultiMetric
 import optax
 from typing import Callable, Union, Optional, List, Tuple
 from .hypernet_utils import build_state_from_parameters
-from data import DataLoader
+from data import JaxDataLoader
 from tqdm import tqdm
 import inspect
 from utils import to_tuple
@@ -54,8 +54,8 @@ train_step = nnx.jit(train_step, static_argnames=("criterion", "metrics", "evalu
 def train_epoch(
         hypernetwork: nnx.Module,
         targetnetwork: nnx.Module,
-        train_loader: DataLoader,
-        val_loader: DataLoader,
+        train_loader: JaxDataLoader,
+        val_loader: JaxDataLoader,
         optimizer: nnx.Optimizer,
         criterion: Callable = optax.l2_loss,
         metrics: Tuple[Callable, ...] = (),
@@ -90,20 +90,20 @@ def train_epoch(
     training_metrics = MultiMetric(**{k: Average(argname=k) for k in [loss_name] + metrics_names})
     validation_metrics = MultiMetric(**{k: Average(argname=k) for k in [loss_name] + metrics_names})
 
-    for data, label in train_loader:
-        hypervariables = data[:, :-1] # mu, l, k TODO: SOSTITUIRE CON UN DIZIONARIO UNA VOLTA IMPLEMENTATO UN DATALOADER
-        x = data[:, -1:] # x
-        train_loss, train_metrics = train_step(hypernetwork, targetnetwork, hypervariables, x, label, optimizer, criterion, metrics)
+    for data in train_loader:
+        hypervariables = data['hypervars'] # mu, l, k
+        x = data['vars'] # x
+        train_loss, train_metrics = train_step(hypernetwork, targetnetwork, hypervariables, x, data['labels'], optimizer, criterion, metrics)
         training_results = {loss_name: train_loss}
         for m in range(len(train_metrics)):
             training_results[metrics_names[m]] = train_metrics[m]
         training_metrics.update(**training_results)
 
 
-    for data, label in val_loader:
-        hypervariables = data[:, :-1] # mu, l, k TODO: SOSTITUIRE CON UN DIZIONARIO UNA VOLTA IMPLEMENTATO UN DATALOADER
-        x = data[:, -1:] # x
-        val_loss, val_metrics = train_step(hypernetwork, targetnetwork, hypervariables, x, label, optimizer, criterion, metrics, evaluation=True)
+    for data in val_loader:
+        hypervariables = data['hypervars'] # mu, l, k
+        x = data['vars'] # x
+        val_loss, val_metrics = train_step(hypernetwork, targetnetwork, hypervariables, x, data['labels'], optimizer, criterion, metrics, evaluation=True)
         validation_results = {loss_name: val_loss}
         for m in range(len(val_metrics)):
             validation_results[metrics_names[m]] = val_metrics[m]
@@ -115,8 +115,8 @@ train_epoch = nnx.jit(train_epoch, static_argnames=("criterion", "metrics", "tra
 def train_and_evaluate(
         hypernetwork: nnx.Module,
         targetnetwork: nnx.Module,
-        train_loader: DataLoader,
-        val_loader: DataLoader,
+        train_loader: JaxDataLoader,
+        val_loader: JaxDataLoader,
         optimizer: nnx.Optimizer,
         num_epochs: int,
         criterion: Callable = optax.l2_loss,
@@ -131,8 +131,8 @@ def train_and_evaluate(
         hypernetwork (nnx.Module): The hypernetwork that generates the parameters for the target network.
         targetnetwork (nnx.Module): The target network that will be modified by the hypernetwork.
         hypervariables (jax.Array): Variables that the hypernetwork uses to generate parameters.
-        train_loader (DataLoader): DataLoader for training data.
-        val_loader (DataLoader): DataLoader for validation data.
+        train_loader (JaxDataLoader): JaxDataLoader for training data.
+        val_loader (JaxDataLoader): JaxDataLoader for validation data.
         optimizer (nnx.Optimizer): Optimizer used to update the hypernetwork parameters.
         num_epochs (int): Number of epochs to train and evaluate.
         criterion (Callable): Function used to compute the loss. It must take as inputs the predictions and targets. Default: optax.l2_loss.
