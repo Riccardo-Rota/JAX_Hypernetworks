@@ -18,9 +18,9 @@ class Dataset:
                  ):
         
         # Convert inputs to dicts of jax arrays (asarray do not force-copy if the input is already a jax array)
-        self.vars = np.asarray(vars)
-        self.hypervars = np.asarray(hypervars)
-        self.labels =  np.asarray(labels)
+        self.vars = jnp.asarray(vars)
+        self.hypervars = jnp.asarray(hypervars)
+        self.labels =  jnp.asarray(labels)
         self.length = self.vars.shape[0]
 
         # Check dataset dimensionality consistency
@@ -31,10 +31,21 @@ class Dataset:
         return self.length
     
     def __getitem__(self, idx: Union[int, ArrayLike]) -> Dict[str, jax.Array]:
+        hypervars = self.hypervars[idx]
+        vars = self.vars[idx]
+        labels = self.labels[idx]
+
+        if hypervars.ndim == 1:
+            hypervars = hypervars[:, None]
+        if vars.ndim == 1:
+            vars = vars[:, None]
+        if labels.ndim == 1:
+            labels = labels[:, None]
+
         return {
-            "hypervars": self.hypervars[idx],
-            "vars": self.vars[idx],
-            "labels": self.labels[idx],
+            "hypervars": hypervars,
+            "vars": vars,
+            "labels": labels,
         }
 
 class JaxDataLoader:
@@ -82,7 +93,7 @@ class JaxDataLoader:
         
         batch_indices = self._indices[start:end]
         
-        batch_data = {k: jnp.asarray(v) for k,v in self.dataset[batch_indices].items()}
+        batch_data = {k: v for k,v in self.dataset[batch_indices].items()}
         
         self._current_idx += self.batch_size
         return batch_data

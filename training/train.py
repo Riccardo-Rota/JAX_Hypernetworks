@@ -50,7 +50,7 @@ def train_step(
 
 train_step = nnx.jit(train_step, static_argnames=("criterion", "metrics", "evaluation")) #QUESTION: Each time we change evaluation to false, does the compliler overwrite the function or not?
 
-#TODO: cambiare in base alla nuova implementazione del dataloader
+
 def train_epoch(
         hypernetwork: nnx.Module,
         targetnetwork: nnx.Module,
