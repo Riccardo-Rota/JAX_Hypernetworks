@@ -1,0 +1,38 @@
+# TODO: use it in the train.py workflow
+
+class ReduceOnPlateau:
+    
+    def __init__(self, base_lr: float, factor: float = 0.5, patience: int = 20, min_lr : float = 1e-8, cooldown = 0, rtol = 1e-4)
+        self.base_lr = base_lr
+        self.factor = factor
+        self.patience = patience
+        self.min_lr = min_lr
+        self.cooldown = cooldown
+        self.rtol = rtol
+
+        self.best = float("inf")
+        self.bad_epochs_counter = 0
+        self.cooldown_counter = 0
+        self.current_lr = base_lr
+
+    def step(self, metric: float):
+        
+        # flag to see if metric has improved
+        is_imporved = metric < (self.best - self.rtol*abs(self.best))
+
+        if is_imporved:
+            self.best = metric
+            self.bad_epochs_counter = 0
+            self.cooldown_counter = 0
+        else:
+            if self.cooldown_counter > 0:
+                self.cooldown_counter -= 1
+            else:
+                self.bad_epochs_counter += 1
+            
+            if self.bad_epochs_counter >= self.patience:
+                self.current_lr = max(self.factor * self.current_lr, self.min_lr)
+                self.cooldown_counter = self.cooldown
+                self.bad_epochs_counter = 0
+
+        return self.current_lr
