@@ -94,9 +94,9 @@ class SirenLayer(nnx.Module):
             inputs,
             kernel,
             (((inputs.ndim - 1,), (0,)), ((), ()))
-            )
+            ) # in the end... simple dot product
         if self.use_bias:
-            y += jnp.reshape(bias, (1,) * (y.ndim - 1) + (-1,))
+            y += jnp.reshape(bias, (1,) * (y.ndim - 1) + (-1,))     # in practice we force bias with dim (1, 1, ..., 1, out_features) with the same number of leading 1s as y.ndim - 1 (batch dimensions)
         return y
 
     def activation(self, inputs):
@@ -140,3 +140,8 @@ class Siren(nnx.Module):
         for lay in self.layers:
             x = lay(x)
         return x
+    
+# Briefly: Siren is a basic FCNN with:
+# - sinusoidal activation functions taken after a rescaling (line 103)
+# - weights initialized from uniform [-1,1] amd rescaled with a specific formula (line 78 for 1st layer, line 80 for others)
+# bias initialized with zeros (nothing special, but I say it for the sake of completeness)
