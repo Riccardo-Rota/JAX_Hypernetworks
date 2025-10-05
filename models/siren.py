@@ -2,8 +2,6 @@ import jax
 import jax.numpy as jnp
 from flax import nnx
 from typing import List, Union, Any
-from .. import config
-from .. import utils
 from flax.typing import Initializer
 
 Dtype = Union[jax.typing.DTypeLike, Any]
@@ -32,7 +30,6 @@ class FCNN(nnx.Module):
     def __init__(self, 
         num_neurons: List[int], 
         *,
-        dtype: Dtype = config.get_dtype(),
         kernel_init: Initializer = nnx.initializers.lecun_normal(),
         bias_init: Initializer = nnx.initializers.zeros_init(),
         rngs: nnx.Rngs,
@@ -40,7 +37,7 @@ class FCNN(nnx.Module):
         if type(kernel_init) == str:
             kernel_init = get_initializer(kernel_init)
         self.layers = [
-            nnx.Linear(num_neurons[i], num_neurons[i+1], rngs=rngs, dtype = dtype, param_dtype = dtype, kernel_init = kernel_init, bias_init = bias_init)
+            nnx.Linear(num_neurons[i], num_neurons[i+1], rngs=rngs, kernel_init = kernel_init, bias_init = bias_init)
             for i in range(len(num_neurons) - 1)]
 
     def __call__(self, x):
@@ -50,9 +47,10 @@ class FCNN(nnx.Module):
                 x = jnp.tanh(x)
         return x
 
-    def get_RMS_kernels(self):
-        kernels = [jnp.square(lay.kernel.value) for lay in self.layers]
-        return utils.global_average(kernels)
+    # ASK REGAZZONI ABOUT THIS FUNCTION
+    # def get_RMS_kernels(self):
+    #     kernels = [jnp.square(lay.kernel.value) for lay in self.layers]
+    #     return utils.global_average(kernels)
 
 class SirenLayer(nnx.Module):
     
@@ -140,6 +138,14 @@ class Siren(nnx.Module):
         for lay in self.layers:
             x = lay(x)
         return x
+    
+    def num_parameters(self):
+        total_params = 0
+        for lay in self.layers:
+            total_params += lay.kernel.value.size
+            if lay.use_bias:
+                total_params += lay.bias.value.size
+        return total_params
     
 # Briefly: Siren is a basic FCNN with:
 # - sinusoidal activation functions taken after a rescaling (line 103)
