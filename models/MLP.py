@@ -45,17 +45,13 @@ class MLP(nnx.Module):
         """
         Initializes the MLP with the specified parameters.
         Args:
-            input_dim (int): Dimension of the input layer.
-            output_dim (int): Dimension of the output layer.
-            num_hidden_layers (int, optional): Number of hidden layers. If None, it is inferred
-                from the length of hidden_dims. Default: None.
-            hidden_dims (int or Sequence[int], optional): Dimension(s) of the hidden layers.
-                If an int is provided, it is used for all hidden layers. If a sequence is 
-                provided, its length must match `num_hidden_layers` if specified. Default: 8.
+            num_neurons (List[int]): List containing the number of neurons in each layer.
             activation_functions (Callable or Sequence[Callable], optional): Activation function(s)
                 for the hidden layers. If a single callable is provided, it is used for all
                 hidden layers. If a sequence is provided, its length must match the number of
                 hidden layers. Default: nnx.relu.
+            kernel_init (Initializer, optional): Initializer for the weights. Default: nnx.initializers.lecun_normal().
+            bias_init (Initializer, optional): Initializer for the biases. Default: nnx.initializers.zeros_init().
             rngs (nnx.Rngs): Random number generators used to initialize the network. Default: nnx.Rngs(0).
         """
 
