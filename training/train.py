@@ -3,6 +3,7 @@ import jax.numpy as jnp
 from flax import nnx
 from flax.nnx.training.metrics import Average, MultiMetric
 import optax
+from optax.contrib._reduce_on_plateau import ReduceLROnPlateauState
 from typing import Callable, Union, Optional, List, Tuple, Dict
 from .hypernet_utils import build_state_from_parameters
 from data import JaxDataLoader
@@ -170,7 +171,7 @@ def train_model(
         log_file_path (str, optional): Path to a log file where training progress will be logged. Default is None (no logging).
     """
 
-    history = {'train_results': [], 'val_results': []}
+    history = {'train_results': [], 'val_results': [], 'lrs': []} # TODO: initializza anche lr
     if metrics is None:
         fn_metrics = ()
         name_metrics = ()
@@ -202,14 +203,23 @@ def train_model(
                                                                        loss_eval_prev=loss_plateau_scheduler)
         train_results_epoch = {'loss': train_loss, **dict(zip(name_metrics, train_metrics))}
         val_results_epoch   = {'loss': val_loss, **dict(zip(name_metrics, val_metrics))}
+        # if reduce on plateau present, save it, otherwise constant 1.0 (NON MOLTO GENERALE: PREVEDE CHE PLATEAU SIA SECONDO OPTAX IN CHAIN)
+        if isinstance(optimizer.opt_state[1], ReduceLROnPlateauState):
+            lr_scale = optimizer.opt_state[1].scale.value
+        else:
+            lr_scale = 1.0
         history['train_results'].append(train_results_epoch)
         history['val_results'].append(val_results_epoch)
+        history['lrs'].append(lr_scale)
+        # save lrs if we have reduce on plateau
         log_compact = f"Epoch {epoch+1}/{num_epochs} - " + \
               f"Train: {', '.join(f'{k}: {v.item():.4f}' for k,v in train_results_epoch.items())} - " + \
-              f"Val: {', '.join(f'{k}: {v.item():.4f}' for k,v in val_results_epoch.items())}"
+              f"Val: {', '.join(f'{k}: {v.item():.4f}' for k,v in val_results_epoch.items())} - " + \
+              f"LR multiplier: {optimizer.opt_state[1].scale.value:.4f}"
         log_detail = f"Epoch {epoch+1}/{num_epochs} - " + \
               f"Train: {', '.join(f'{k}: {v.item():.8f}' for k,v in train_results_epoch.items())} - " + \
-              f"Val: {', '.join(f'{k}: {v.item():.8f}' for k,v in val_results_epoch.items())}"
+              f"Val: {', '.join(f'{k}: {v.item():.8f}' for k,v in val_results_epoch.items())} - " + \
+              f"LR multiplier: {optimizer.opt_state[1].scale.value:.8f}"
         pbar.set_description(log_compact)
 
         if log_file_path:
@@ -235,7 +245,6 @@ def train_model(
         with open(log_file_path, "a") as f:
             f.write(f"Training Log - End time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
-    # TODO: sistemare il plateau scheduler
     return history
 
 
