@@ -3,7 +3,7 @@ import jax.numpy as jnp
 from flax import nnx
 from flax.nnx.training.metrics import Average, MultiMetric
 import optax
-from typing import Callable, Union, Optional, List, Tuple
+from typing import Callable, Union, Optional, List, Tuple, Dict
 from .hypernet_utils import build_state_from_parameters
 from data import JaxDataLoader
 from tqdm import tqdm
@@ -14,105 +14,115 @@ from datetime import datetime
 
 #TODO: controllare tutti i tipi e i docstring
 
-def train_step(
+def perform_step(
     hypernetwork: nnx.Module,
     targetnetwork: nnx.Module, 
     hypervariables: jax.Array, 
     x: jax.Array, 
     y: jax.Array, 
-    optimizer: nnx.Optimizer, 
     criterion: Callable = optax.l2_loss,
-    metrics: Tuple[Callable, ...] = (),
     evaluation: bool = False,
+    optimizer: Optional[nnx.Optimizer] = None,
+    loss_eval_prev: Optional[float] = None
 ):
     """
     TODO: commentare
     """
-    def compute_loss_and_metrics(hypernetwork, hypervariables, x, y):
+    def forward_pass(hypernetwork, hypervariables, x, y):
         w = hypernetwork(hypervariables)
         graphdef, template_state = nnx.split(targetnetwork)
         state = nnx.vmap(build_state_from_parameters, in_axes=(None, 0), out_axes=0)(template_state, w)
         modified_targetnetwork = nnx.merge(graphdef, state)
 
         pred = nnx.vmap(type(modified_targetnetwork).__call__)(modified_targetnetwork, x)
-        loss = jnp.mean(compute_metrics(criterion, pred, y, w))
+        loss = jnp.mean(compute(criterion, pred, y, w))
 
-        metrics_vals = [jnp.mean(compute_metrics(m, pred, y, w)) for m in metrics] if metrics else []
-        return loss, metrics_vals
-    
+        return loss, (pred, w)
+
     if evaluation:
-        loss, metrics_vals = compute_loss_and_metrics(hypernetwork, hypervariables, x, y)
+        loss, (pred, w) = forward_pass(hypernetwork, hypervariables, x, y)
     else:
-        (loss, metrics_vals), grads = nnx.value_and_grad(compute_loss_and_metrics, has_aux=True)(hypernetwork, hypervariables, x, y)
-        optimizer.update(grads)
-
-    return loss, metrics_vals
-
-train_step = nnx.jit(train_step, static_argnames=("criterion", "metrics", "evaluation")) #QUESTION: Each time we change evaluation to false, does the compliler overwrite the function or not?
+        (loss, (pred, w)), grads = nnx.value_and_grad(forward_pass, has_aux=True)(hypernetwork, hypervariables, x, y)
+        optimizer.update(grads, value=loss_eval_prev)
 
 
-def train_epoch(
+    # def optimize(hypernetwork, hypervariables, x, y):
+    #     (loss, (pred, w)), grads = nnx.value_and_grad(forward_pass, has_aux=True)(hypernetwork, hypervariables, x, y)
+    #     optimizer.update(grads, value=loss_eval_prev)
+    #     return loss, pred, w
+    
+    # loss, pred, w = nnx.cond(optimizer is None,
+    #                              forward_pass,
+    #                              optimize,
+    #                              hypernetwork, hypervariables, x, y)
+
+    return loss, pred, w
+
+perform_step = nnx.jit(perform_step, static_argnames=("criterion", "evaluation"))
+
+
+def perform_epoch(
         hypernetwork: nnx.Module,
         targetnetwork: nnx.Module,
         train_loader: JaxDataLoader,
         val_loader: JaxDataLoader,
-        optimizer: nnx.Optimizer,
+        optimizer: Optional[nnx.Optimizer] = None,
         criterion: Callable = optax.l2_loss,
         metrics: Tuple[Callable, ...] = (),
-        metrics_names: Optional[List[str]] = None,
+        loss_eval_prev: Optional[float] = None
         ) -> tuple:
     """
-    Trains and evaluates the model for one epoch.
-    Args:
-        hypernetwork (nnx.Module): The hypernetwork that generates the parameters for the target network.
-        targetnetwork (nnx.Module): The target network that will be modified by the hypernetwork.
-        hypervariables (jax.Array): Variables that the hypernetwork uses to generate parameters.
-        train_loader (DataLoader): DataLoader for training data.
-        val_loader (DataLoader): DataLoader for validation data.
-        optimizer (nnx.Optimizer): Optimizer used to update the hypernetwork parameters.
-        criterion (Callable): Function used to compute the loss. It must take as inputs the predictions and targets. Default: optax.l2_loss.
-        metrics (Union[Callable, dict, None]): Metrics to compute during training and evaluation. Default: None.
-    Returns:
-        train_loss (jax.Array): The computed training loss for the epoch.
-        val_loss (jax.Array): The computed validation loss for the epoch.
+    TODO: commentare
     """
-    if metrics_names:
-        assert len(metrics_names) == len(metrics) or len(metrics_names) == len(metrics) + 1, "Length of metrics_names must be equal to length of metrics or length of metrics + 1 (for loss)."
-        if len(metrics_names) == len(metrics):
-            loss_name = 'loss'
-        else:
-            loss_name = metrics_names[0]
-            metrics_names = metrics_names[1:]
-    else:
-        loss_name = 'loss'
-        metrics_names = [m.__name__ for m in metrics]
-
-    training_metrics = MultiMetric(**{k: Average(argname=k) for k in [loss_name] + metrics_names})
-    validation_metrics = MultiMetric(**{k: Average(argname=k) for k in [loss_name] + metrics_names})
+    train_loss_epoch = 0.0
+    val_loss_epoch = 0.0
+    n_samples_train = 0
+    train_metrics_epoch = [0.0 for _ in range(len(metrics))]
+    val_metrics_epoch = [0.0 for _ in range(len(metrics))]
+    n_samples_val = 0
 
     for data in train_loader:
         hypervariables = data['hypervars'] # mu, l, k
         x = data['vars'] # x
-        train_loss, train_metrics = train_step(hypernetwork, targetnetwork, hypervariables, x, data['labels'], optimizer, criterion, metrics)
-        training_results = {loss_name: train_loss}
-        for m in range(len(train_metrics)):
-            training_results[metrics_names[m]] = train_metrics[m]
-        training_metrics.update(**training_results)
-
+        y = data['labels'] # y
+        train_loss, pred, w = perform_step(hypernetwork = hypernetwork, 
+                                        targetnetwork = targetnetwork,
+                                        hypervariables = hypervariables, 
+                                        x = x, 
+                                        y = y, 
+                                        optimizer = optimizer, 
+                                        criterion = criterion, 
+                                        loss_eval_prev = loss_eval_prev)
+        train_loss_epoch += train_loss * x.shape[0]
+        n_samples_train += x.shape[0]
+        for m in range(len(metrics)):
+            train_metrics_epoch[m] += jnp.mean(compute(metrics[m], pred, y, w)) * x.shape[0]
+    train_loss_epoch /= n_samples_train
+    train_metrics_epoch = [m / n_samples_train for m in train_metrics_epoch]
 
     for data in val_loader:
         hypervariables = data['hypervars'] # mu, l, k
         x = data['vars'] # x
-        val_loss, val_metrics = train_step(hypernetwork, targetnetwork, hypervariables, x, data['labels'], optimizer, criterion, metrics, evaluation=True)
-        validation_results = {loss_name: val_loss}
-        for m in range(len(val_metrics)):
-            validation_results[metrics_names[m]] = val_metrics[m]
-        validation_metrics.update(**validation_results)
-    return training_metrics, validation_metrics
+        y = data['labels'] # y
+        val_loss, pred, w = perform_step(hypernetwork = hypernetwork, 
+                                        targetnetwork = targetnetwork,
+                                        hypervariables = hypervariables, 
+                                        x = x, 
+                                        y = y, 
+                                        criterion = criterion,
+                                        evaluation = True)
+        val_loss_epoch += val_loss * x.shape[0]
+        n_samples_val += x.shape[0]
+        for m in range(len(metrics)):
+            val_metrics_epoch[m] += jnp.mean(compute(metrics[m], pred, y, w)) * x.shape[0]
+    val_loss_epoch /= n_samples_val
+    val_metrics_epoch = [m / n_samples_val for m in val_metrics_epoch]
 
-train_epoch = nnx.jit(train_epoch, static_argnames=("criterion", "metrics", "train_loader", "val_loader"))
+    return train_loss_epoch, train_metrics_epoch, val_loss_epoch, val_metrics_epoch
 
-def train_and_evaluate(
+perform_epoch = nnx.jit(perform_epoch, static_argnames=("criterion", "metrics", "train_loader", "val_loader"))
+
+def train_model(
         hypernetwork: nnx.Module,
         targetnetwork: nnx.Module,
         train_loader: JaxDataLoader,
@@ -120,68 +130,68 @@ def train_and_evaluate(
         optimizer: nnx.Optimizer,
         num_epochs: int,
         criterion: Callable = optax.l2_loss,
-        metrics: Union[List[Callable], Tuple[Callable, ...], None] = None,
+        metrics: Optional[Dict[str, Callable]] = None,
         early_stopping: Optional[EarlyStopping] = None,
         early_stopping_metric: Optional[Union[str, int]] = None,
+        plateau_scheduler_metric: Optional[Union[str, int]] = None,
         log_file_path: Optional[str] = None,
         ) -> tuple:
     """
-    Trains and evaluates the model for a specified number of epochs.
-    Args:
-        hypernetwork (nnx.Module): The hypernetwork that generates the parameters for the target network.
-        targetnetwork (nnx.Module): The target network that will be modified by the hypernetwork.
-        hypervariables (jax.Array): Variables that the hypernetwork uses to generate parameters.
-        train_loader (JaxDataLoader): JaxDataLoader for training data.
-        val_loader (JaxDataLoader): JaxDataLoader for validation data.
-        optimizer (nnx.Optimizer): Optimizer used to update the hypernetwork parameters.
-        num_epochs (int): Number of epochs to train and evaluate.
-        criterion (Callable): Function used to compute the loss. It must take as inputs the predictions and targets. Default: optax.l2_loss.
-        metrics (Union[List[Callable], Tuple[Callable, ...], None]): Metrics to compute during training and evaluation. Default: None.
-        early_stopping (Optional[EarlyStopping]): Early stopping callback to stop training when a metric stops improving. Default: None.
-        early_stopping_metric (Optional[Union[str, int]]): Metric to monitor for early stopping. Can be a string (metric name) or an integer (metric index). Default: None (first metric).
-        log_to_file (bool): If True, logs training and validation metrics to a file. Default: False.
-    Returns:
-        history (dict): A dictionary containing training and validation losses for each epoch.
+    TODO: commentare
     """
 
-    history = {'train_metrics': [], 'val_metrics': []}
-    metrics = to_tuple(metrics)
+    history = {'train_results': [], 'val_results': []}
+    if metrics is None:
+        fn_metrics = ()
+        name_metrics = ()
+    else:
+        fn_metrics = tuple(metrics.values())
+        name_metrics = tuple(metrics.keys())
+
+    early_stopping_metric_name = check_metric_name(early_stopping_metric, name_metrics)
+    if early_stopping_metric_name == -1:
+        raise ValueError("Invalid early_stopping_metric. It must be either None, a valid metric name or a valid metric index.")
+    plateau_scheduler_metric_name = check_metric_name(plateau_scheduler_metric, name_metrics)
+    if plateau_scheduler_metric_name == -1:
+        raise ValueError("Invalid plateau_scheduler_metric. It must be either None, a valid metric name or a valid metric index.")
+
     if log_file_path:
         with open(log_file_path, "w") as f:
             f.write(f"Training Log - Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+    loss_plateau_scheduler = jnp.inf
 
     pbar = tqdm(range(num_epochs))
     for epoch in pbar:
-        train_metrics, val_metrics = train_epoch(hypernetwork, targetnetwork, train_loader, val_loader, optimizer, criterion, metrics)
-        history['train_metrics'].append(train_metrics.compute())
-        history['val_metrics'].append(val_metrics.compute())
+        train_loss, train_metrics, val_loss, val_metrics = perform_epoch(hypernetwork=hypernetwork,
+                                                                       targetnetwork=targetnetwork,
+                                                                       train_loader=train_loader, 
+                                                                       val_loader=val_loader, 
+                                                                       optimizer=optimizer, 
+                                                                       criterion=criterion, 
+                                                                       metrics=fn_metrics,
+                                                                       loss_eval_prev=loss_plateau_scheduler)
+        train_results_epoch = {'loss': train_loss, **dict(zip(name_metrics, train_metrics))}
+        val_results_epoch   = {'loss': val_loss, **dict(zip(name_metrics, val_metrics))}
+        history['train_results'].append(train_results_epoch)
+        history['val_results'].append(val_results_epoch)
         log_compact = f"Epoch {epoch+1}/{num_epochs} - " + \
-              f"Train: {', '.join(f'{k}: {v.item():.4f}' for k,v in train_metrics.compute().items())} - " + \
-              f"Val: {', '.join(f'{k}: {v.item():.4f}' for k,v in val_metrics.compute().items())}"
+              f"Train: {', '.join(f'{k}: {v.item():.4f}' for k,v in train_results_epoch.items())} - " + \
+              f"Val: {', '.join(f'{k}: {v.item():.4f}' for k,v in val_results_epoch.items())}"
         log_detail = f"Epoch {epoch+1}/{num_epochs} - " + \
-              f"Train: {', '.join(f'{k}: {v.item():.8f}' for k,v in train_metrics.compute().items())} - " + \
-              f"Val: {', '.join(f'{k}: {v.item():.8f}' for k,v in val_metrics.compute().items())}"
+              f"Train: {', '.join(f'{k}: {v.item():.8f}' for k,v in train_results_epoch.items())} - " + \
+              f"Val: {', '.join(f'{k}: {v.item():.8f}' for k,v in val_results_epoch.items())}"
         pbar.set_description(log_compact)
 
         if log_file_path:
             with open(log_file_path, "a") as f:
                 f.write(log_detail + "\n")
 
+        loss_plateau_scheduler = val_results_epoch[plateau_scheduler_metric_name]
         if early_stopping:
-            if isinstance(early_stopping_metric, str):
-                if early_stopping_metric not in val_metrics.compute():
-                    raise ValueError(f"Metric for early stopping '{early_stopping_metric}' not found in validation metrics.")
-                metric_index = list(val_metrics.compute().keys()).index(early_stopping_metric)
-            elif isinstance(early_stopping_metric, int):
-                if early_stopping_metric < 0 or early_stopping_metric >= len(val_metrics.compute()):
-                    raise ValueError(f"Metric index for early stopping '{early_stopping_metric}' is out of range.")
-                metric_index = early_stopping_metric
-            else:
-                metric_index = 0
-
-            early_stopping(current_loss = list(val_metrics.compute().values())[metric_index], 
-                           current_model = hypernetwork, 
-                           current_epoch = epoch)
+            loss_early_stopping = val_results_epoch[early_stopping_metric_name]
+            early_stopping(current_loss=loss_early_stopping,
+                           current_model=hypernetwork,
+                           current_epoch=epoch)
             if early_stopping.should_stop:
                 print(f"Early stopping at epoch {epoch+1}. Best epoch was {early_stopping.best_epoch+1} with loss {early_stopping.best_loss:.8f}.")
                 if log_file_path:
@@ -199,20 +209,34 @@ def train_and_evaluate(
     return history
 
 
-def compute_metrics(metric: Callable, preds: jax.Array, targets: jax.Array, weights: jax.Array) -> jax.Array:
+def compute(function: Callable, preds: jax.Array, targets: jax.Array, weights: jax.Array) -> jax.Array:
     """
-    Computes the specified metric between predictions and targets.
+    Auxiliary function to compute a loss, handling both cases where the loss requires weights and where it does not.
     Args:
-        metric (Callable): The metric function to compute. It must take as inputs the predictions and targets.
+        function (Callable): The loss function to compute. It must take as inputs the predictions and targets.
         preds (jax.Array): The predicted values.
         targets (jax.Array): The ground truth values.
         weights (jax.Array): The weights generated by the hypernetwork.
     Returns:
-        jax.Array: The computed metric value.
+        jax.Array: The computed loss value.
     """
-    if 'weights' in inspect.getfullargspec(metric).args:
-        return metric(preds, targets, weights)
+    if 'weights' in inspect.getfullargspec(function).args:
+        return function(preds, targets, weights)
     else:
-        return metric(preds, targets)
-    
-compute_metrics = nnx.jit(compute_metrics, static_argnames=("metric",))
+        return function(preds, targets)
+
+compute = nnx.jit(compute, static_argnames=("function",))
+
+def check_metric_name(metric: Union[str, int, None], name_metrics: Tuple[str]) -> int:
+    if metric is None:
+        return 'loss'
+    if isinstance(metric, str):
+        if metric not in name_metrics:
+            return -1
+        return metric
+    elif isinstance(metric, int):
+        if metric < 0 or metric >= len(name_metrics):
+            return -1
+        return name_metrics[metric]
+    else:
+        return -1
