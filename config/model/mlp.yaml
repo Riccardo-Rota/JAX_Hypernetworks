@@ -1,0 +1,7 @@
+_target_: models.MLP
+
+num_neurons: [1, 64, 64, 1]
+kwargs:
+  activation_functions:
+    - _target_: flax.nnx.tanh
+    - _target_: flax.nnx.tanh

@@ -1,0 +1,17 @@
+epochs: 1000
+batch_size: 128
+
+criterion:
+  _target_: losses.CustomLoss
+
+metrics:
+  RRMSE:
+    _target_: losses.RRMSE
+  MAE:
+    _target_: losses.MAE
+
+early_stopping:
+  _target_: training.EarlyStopping
+  patience: 50
+  min_delta: 1.0e-5
+  metric_name: 'RRMSE'

@@ -1,0 +1,30 @@
+hydra:
+  job:
+    name: default # change name if needed
+    chdir: true
+  run:
+    dir: runs/${now:YYYY-MM-DD}/${now:HH-mm-ss}
+
+defaults:
+  - data: default
+  - training: default
+  - optimizer: adam_cosine_decay
+  - model: mlp
+  - override hydra/job_logging: colorlog
+  - override hydra/hydra_logging: colorlog
+
+targetnetwork:
+  _target_: hydra.utils.instantiate
+  config: ${model}
+  rngs:
+    _target_: flax.nnx.Rngs
+    default: 0
+
+hypernetwork:
+  _target_: hydra.utils.instantiate
+  config: ${model}
+  rngs:
+    _target_: flax.nnx.Rngs
+    default: 0
+
+seed: 0
