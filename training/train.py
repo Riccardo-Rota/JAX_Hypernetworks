@@ -215,11 +215,11 @@ def train_model(
         log_compact = f"Epoch {epoch+1}/{num_epochs} - " + \
               f"Train: {', '.join(f'{k}: {v.item():.4f}' for k,v in train_results_epoch.items())} - " + \
               f"Val: {', '.join(f'{k}: {v.item():.4f}' for k,v in val_results_epoch.items())} - " + \
-              f"LR multiplier: {optimizer.opt_state[1].scale.value:.4f}"
+              f"LR multiplier: {lr_scale:.4f}"
         log_detail = f"Epoch {epoch+1}/{num_epochs} - " + \
               f"Train: {', '.join(f'{k}: {v.item():.8f}' for k,v in train_results_epoch.items())} - " + \
               f"Val: {', '.join(f'{k}: {v.item():.8f}' for k,v in val_results_epoch.items())} - " + \
-              f"LR multiplier: {optimizer.opt_state[1].scale.value:.8f}"
+              f"LR multiplier: {lr_scale:.8f}"
         pbar.set_description(log_compact)
 
         if log_file_path:
