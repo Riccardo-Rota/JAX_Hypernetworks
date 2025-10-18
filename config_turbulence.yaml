@@ -1,0 +1,41 @@
+dataloader:
+  batch_size: 1024
+
+hypernetwork:
+  model: 'MLP' # 'SIREN' or 'MLP'
+  num_neurons: [1, 32, 64, 128, null] # null will be replaced by the number of parameters of the target network
+  kwargs:
+    activation_functions: ['relu', 'relu', 'relu'] # for MLP
+    # w0_first: float = 30, # for SIREN
+    # w0_last: float = 30,  # for SIREN
+    # w0_other: float = 30, # for SIREN
+
+targetnetwork:
+  model: 'MLP' # 'SIREN' or 'MLP'
+  num_neurons: [2, 8, 8, 4]
+  kwargs:
+    activation_functions: ['tanh', 'tanh'] # for MLP
+    # w0_first: float = 30, # for SIREN
+    # w0_last: float = 30,  # for SIREN
+    # w0_other: float = 30, # for SIREN
+
+training:
+  criterion: 'l2_loss'
+  metrics: ['RRMSE', 'MAE', 'RMSE', 'MSE']
+  epochs: 10000
+  early_stopping:
+    patience: 1000
+    min_delta: 1.0e-9
+  scheduler:
+    type: 'cosine_decay' # 'cosine_decay' or 'reduce_on_plateau'
+    cosine_decay:
+      init_value: 0.01
+      decay_steps: 100000
+      alpha: 1.0e-6
+    reduce_on_plateau:
+      factor: 0.2
+      patience: 100
+      init_value: 0.1
+    
+inference:
+  N_examples: 4
