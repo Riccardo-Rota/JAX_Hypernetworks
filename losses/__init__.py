@@ -1,6 +1,6 @@
-from .losses import RRMSE, l2_loss, MAE, CustomLoss
+from .losses import L2Loss, CustomLoss
 
-__all__ = ['RRMSE', 
-           'l2_loss', 
-           'MAE', 
-           'CustomLoss']
+__all__ = [
+    'L2Loss', 
+    'CustomLoss'
+]

@@ -22,17 +22,7 @@ def get_initializer(name):
 class MLP(nnx.Module):
     """
     A flexible MLP class that allows for a variable number of hidden layers and dimensions.
-    Attributes:
-        input_dim (int): Dimension of the input layer.
-        output_dim (int): Dimension of the output layer.
-        num_hidden_layers (int): Number of hidden layers.
-        hidden_dims (list): Dimensions of the hidden layers.
-        activation_functions (list): Activation functions for the hidden layers.
-        num_parameters (int): Total number of parameters in the network.
-    Methods:
-        __call__(x): Forward pass through the network.
     """
-   
     def __init__(
         self,
         num_neurons: List[int],

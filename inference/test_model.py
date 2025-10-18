@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 from flax import nnx
-from flax.nnx.training.metrics import Average, MultiMetric
-from typing import Callable, Optional, List, Tuple
+from flax.nnx.training.metrics import Average, MultiMetric, Metric
+from typing import Callable, Optional, List, Tuple, Union, Dict
 from data import JaxDataLoader
 from tqdm import tqdm
 from training import build_state_from_parameters
@@ -11,8 +11,7 @@ def test_model(
         hypernetwork: nnx.Module,
         targetnetwork: nnx.Module,
         loader: JaxDataLoader,
-        metrics: Tuple[Callable, ...] = (),
-        metrics_names: Optional[List[str]] = None,
+        metrics: Optional[Union[MultiMetric, Dict[str, Metric]]] = None,
         ) -> tuple:
     """
     Trains and evaluates the model for one epoch.
@@ -20,17 +19,17 @@ def test_model(
         hypernetwork (nnx.Module): The hypernetwork that generates the parameters for the target network.
         targetnetwork (nnx.Module): The target network that will be modified by the hypernetwork.
         loader (DataLoader): DataLoader for testing data.
-        metrics (Union[Callable, dict, None]): Metrics to compute during training and evaluation. Default: None.
-        metrics_names (Optional[List[str]]): Optional list of names for the metrics. If provided, its length must match the number of metrics. Default: None.
+        metrics (Optional[Union[MultiMetric, Dict[str, Metric]]]): Metrics to compute during testing. Default: None.
     Returns:
         MultiMetric: Computed metrics.
     """
-    if metrics_names:
-        assert len(metrics_names) == len(metrics), "Length of metrics_names must be equal to length of metrics."
-    else:
-        metrics_names = [m.__name__ for m in metrics]
-
-    metrics_collector = MultiMetric(**{k: Average(argname=k) for k in metrics_names})
+    if not isinstance(metrics, MultiMetric):
+        if isinstance(metrics, dict):
+            metrics = MultiMetric(**metrics)
+        elif metrics is None:
+            metrics = MultiMetric()
+        else:
+            raise ValueError("metrics must be either a MultiMetric instance, a dictionary of metrics, or None.")
 
     for data in tqdm(loader, desc="Testing"):
         y = data['labels'] # y
@@ -42,9 +41,5 @@ def test_model(
         modified_targetnetwork = nnx.merge(graphdef, state)
         pred = nnx.vmap(type(modified_targetnetwork).__call__)(modified_targetnetwork, x)
         modified_targetnetwork = nnx.merge(graphdef, state)
-        metrics_vals = {metrics_names[i]: jnp.mean(m(pred, y)) for i, m in enumerate(metrics)} if metrics else {}
-        metrics_collector.update(**metrics_vals)
-    return metrics_collector.compute()
-
-#test_model = nnx.jit(test_model, static_argnames=("hypernetwork", "targetnetwork", "loader", "metrics"))
-# TODO: jitting
+        metrics.update(predictions=pred, targets=y)
+    return metrics.compute()

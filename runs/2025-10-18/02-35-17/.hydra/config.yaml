@@ -1,0 +1,75 @@
+training:
+  epochs: 1000
+  batch_size: 1024
+  criterion:
+    _target_: losses.L2Loss
+  metrics:
+    RRMSE:
+      _target_: metrics.RRMSE
+    MAE:
+      _target_: metrics.MAE
+    RMSE:
+      _target_: metrics.RMSE
+    MSE:
+      _target_: metrics.MSE
+  early_stopping:
+    _target_: training.EarlyStopping
+    patience: 1000
+    min_delta: 1.0e-05
+  early_stopping_metric: RRMSE
+optimizer:
+  _target_: flax.nnx.Optimizer
+  tx:
+    _target_: optax.adam
+    learning_rate:
+      _target_: optax.schedules.cosine_decay_schedule
+      init_value: 0.001
+      decay_steps: 10000
+      alpha: 0.0
+data:
+  _target_: utils.variable_generator.build_function_dataset_from_config
+  f_to_learn: 'lambda mu, l, k, x: jnp.exp(-l*x) + mu*x + k*x**2'
+  mu_domain:
+  - -2
+  - 2
+  l_domain:
+  - 0
+  - 1
+  k_domain:
+  - -2
+  - 2
+  x_domain:
+  - -1
+  - 1
+  'N': 1000
+  n_realizations: 10
+  key: 0
+targetnetwork:
+  _target_: models.MLP
+  num_neurons:
+  - 1
+  - 8
+  - 8
+  - 1
+  activation_functions:
+  - _target_: models.get_tanh
+  - _target_: models.get_tanh
+  rngs:
+    _target_: flax.nnx.Rngs
+    default: 0
+hypernetwork:
+  _target_: models.MLP
+  num_neurons:
+  - 3
+  - 64
+  - 64
+  - 128
+  - null
+  activation_functions:
+  - _target_: models.get_relu
+  - _target_: models.get_relu
+  - _target_: models.get_relu
+  rngs:
+    _target_: flax.nnx.Rngs
+    default: 0
+seed: 0

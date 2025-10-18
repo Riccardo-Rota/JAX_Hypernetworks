@@ -1,17 +1,21 @@
-epochs: 1000
-batch_size: 128
+epochs: 10000
+batch_size: 1024
 
 criterion:
-  _target_: losses.CustomLoss
+  _target_: losses.L2Loss
 
 metrics:
   RRMSE:
-    _target_: losses.RRMSE
+    _target_: metrics.RRMSE
   MAE:
-    _target_: losses.MAE
+    _target_: metrics.MAE
+  RMSE:
+    _target_: metrics.RMSE
+  
 
 early_stopping:
   _target_: training.EarlyStopping
-  patience: 50
-  min_delta: 1.0e-5
-  metric_name: 'RRMSE'
+  patience: 1000
+  min_delta: 1.0e-8
+
+early_stopping_metric: RRMSE

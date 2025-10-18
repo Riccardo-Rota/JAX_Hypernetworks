@@ -1,15 +1,16 @@
 import jax
 import jax.numpy as jnp
 from flax import nnx
-from flax.nnx.training.metrics import Average, MultiMetric
+from flax.nnx.training.metrics import Metric, Average, MultiMetric
 import optax
 from optax.contrib._reduce_on_plateau import ReduceLROnPlateauState
 from typing import Callable, Union, Optional, List, Tuple, Dict
+from losses import L2Loss
 from .hypernet_utils import build_state_from_parameters
 from data import JaxDataLoader
 from tqdm import tqdm
 import inspect
-from utils import to_tuple
+import copy
 from .early_stopping import EarlyStopping
 from datetime import datetime
 
@@ -50,7 +51,10 @@ def perform_step(
         modified_targetnetwork = nnx.merge(graphdef, state)
 
         pred = nnx.vmap(type(modified_targetnetwork).__call__)(modified_targetnetwork, x)
-        loss = jnp.mean(compute(criterion, pred, y, w))
+        if 'weights' in inspect.getfullargspec(criterion.__call__).args:
+            loss = jnp.mean(criterion(pred, y, w))
+        else:
+            loss = jnp.mean(criterion(pred, y))
 
         return loss, (pred, w)
 
@@ -62,7 +66,7 @@ def perform_step(
 
     return loss, pred, w
 
-perform_step = nnx.jit(perform_step, static_argnames=("criterion", "evaluation"))
+perform_step = nnx.jit(perform_step, static_argnames=("evaluation"))
 
 
 def perform_epoch(
@@ -71,8 +75,8 @@ def perform_epoch(
         train_loader: JaxDataLoader,
         val_loader: JaxDataLoader,
         optimizer: Optional[nnx.Optimizer] = None,
-        criterion: Callable = optax.l2_loss,
-        metrics: Tuple[Callable, ...] = (),
+        criterion: nnx.Module = L2Loss(),
+        metrics: MultiMetric = MultiMetric(),
         loss_eval_prev: Optional[float] = None
         ) -> tuple:
     """
@@ -83,62 +87,58 @@ def perform_epoch(
         train_loader (JaxDataLoader): DataLoader for the training data.
         val_loader (JaxDataLoader): DataLoader for the validation data.
         optimizer (nnx.Optimizer, optional): The optimizer to use for updating the hypernetwork parameters. Required for training.
-        criterion (Callable, optional): The loss function to use. Default is optax.l2_loss.
-        metrics (Tuple[Callable, ...], optional): A tuple of metric functions to compute during the epoch. Default is an empty tuple.
+        criterion (nnx.Module, optional): The loss function to use. Default is L2Loss().
+        metrics (MultiMetric, optional): The metrics to use for evaluation. Default is MultiMetric().
         loss_eval_prev (float, optional): Previous epoch evaluation loss, used for optimizers that require it. Default is None.
     Returns:
         train_loss_epoch (float): The average training loss for the epoch.
-        train_metrics_epoch (List[float]): The average training metrics for the epoch.
+        train_metrics (Dict[str, float]): The average training metrics for the epoch.
         val_loss_epoch (float): The average validation loss for the epoch.
-        val_metrics_epoch (List[float]): The average validation metrics for the epoch.
+        val_metrics (Dict[str, float]): The average validation metrics for the epoch.
     """
     train_loss_epoch = 0.0
     val_loss_epoch = 0.0
     n_samples_train = 0
-    train_metrics_epoch = [0.0 for _ in range(len(metrics))]
-    val_metrics_epoch = [0.0 for _ in range(len(metrics))]
     n_samples_val = 0
+    train_metrics = metrics
+    val_metrics = copy.deepcopy(train_metrics)
 
     for data in train_loader:
         hypervariables = data['hypervars'] # mu, l, k
         x = data['vars'] # x
         y = data['labels'] # y
         train_loss, pred, w = perform_step(hypernetwork = hypernetwork, 
-                                        targetnetwork = targetnetwork,
-                                        hypervariables = hypervariables, 
-                                        x = x, 
-                                        y = y, 
-                                        optimizer = optimizer, 
-                                        criterion = criterion, 
-                                        loss_eval_prev = loss_eval_prev)
+                                           targetnetwork = targetnetwork,
+                                           hypervariables = hypervariables, 
+                                           x = x, 
+                                           y = y, 
+                                           optimizer = optimizer, 
+                                           criterion = criterion, 
+                                           loss_eval_prev = loss_eval_prev)
         train_loss_epoch += train_loss * x.shape[0]
         n_samples_train += x.shape[0]
-        for m in range(len(metrics)):
-            train_metrics_epoch[m] += jnp.mean(compute(metrics[m], pred, y, w)) * x.shape[0]
+        train_metrics.update(predictions=pred, targets=y)
     train_loss_epoch /= n_samples_train
-    train_metrics_epoch = [m / n_samples_train for m in train_metrics_epoch]
 
     for data in val_loader:
         hypervariables = data['hypervars'] # mu, l, k
         x = data['vars'] # x
         y = data['labels'] # y
         val_loss, pred, w = perform_step(hypernetwork = hypernetwork, 
-                                        targetnetwork = targetnetwork,
-                                        hypervariables = hypervariables, 
-                                        x = x, 
-                                        y = y, 
-                                        criterion = criterion,
-                                        evaluation = True)
+                                         targetnetwork = targetnetwork,
+                                         hypervariables = hypervariables, 
+                                         x = x, 
+                                         y = y, 
+                                         criterion = criterion,
+                                         evaluation = True)
         val_loss_epoch += val_loss * x.shape[0]
         n_samples_val += x.shape[0]
-        for m in range(len(metrics)):
-            val_metrics_epoch[m] += jnp.mean(compute(metrics[m], pred, y, w)) * x.shape[0]
+        val_metrics.update(predictions=pred, targets=y)
     val_loss_epoch /= n_samples_val
-    val_metrics_epoch = [m / n_samples_val for m in val_metrics_epoch]
 
-    return train_loss_epoch, train_metrics_epoch, val_loss_epoch, val_metrics_epoch
+    return train_loss_epoch, train_metrics.compute(), val_loss_epoch, val_metrics.compute()
 
-perform_epoch = nnx.jit(perform_epoch, static_argnames=("criterion", "metrics", "train_loader", "val_loader"))
+perform_epoch = nnx.jit(perform_epoch, static_argnames=("train_loader", "val_loader"))
 
 def train_model(
         hypernetwork: nnx.Module,
@@ -147,8 +147,8 @@ def train_model(
         val_loader: JaxDataLoader,
         optimizer: nnx.Optimizer,
         num_epochs: int,
-        criterion: Callable = optax.l2_loss,
-        metrics: Optional[Dict[str, Callable]] = None,
+        criterion: nnx.Module = L2Loss(),
+        metrics: Optional[Union[MultiMetric, Dict[str, Metric]]] = None,
         early_stopping: Optional[EarlyStopping] = None,
         early_stopping_metric: Optional[Union[str, int]] = None,
         plateau_scheduler_metric: Optional[Union[str, int]] = None,
@@ -169,20 +169,24 @@ def train_model(
         early_stopping_metric (str or int, optional): The metric to monitor for early stopping. Can be a metric name or index. Default is None (uses the validation loss).
         plateau_scheduler_metric (str or int, optional): The metric to monitor for learning rate plateau scheduling. Can be a metric name or index. Default is None (uses the validation loss).
         log_file_path (str, optional): Path to a log file where training progress will be logged. Default is None (no logging).
+    Returns:
+        history (Dict[str, List[float]]): A dictionary containing training and validation losses and metrics for each epoch.
     """
 
-    history = {'train_results': [], 'val_results': [], 'lrs': []} # TODO: initializza anche lr
-    if metrics is None:
-        fn_metrics = ()
-        name_metrics = ()
-    else:
-        fn_metrics = tuple(metrics.values())
-        name_metrics = tuple(metrics.keys())
+    if not isinstance(metrics, MultiMetric):
+        if isinstance(metrics, dict):
+            metrics = MultiMetric(**metrics)
+        elif metrics is None:
+            metrics = MultiMetric()
+        else:
+            raise ValueError("metrics must be either a MultiMetric instance, a dictionary of metrics, or None.")
 
-    early_stopping_metric_name = check_metric_name(early_stopping_metric, name_metrics)
+    history = {'train_results': [], 'val_results': [],  'lrs': []} # TODO: initializza anche lrs
+
+    early_stopping_metric_name = check_metric_name(early_stopping_metric, metrics._metric_names)
     if early_stopping_metric_name == -1:
         raise ValueError("Invalid early_stopping_metric. It must be either None, a valid metric name or a valid metric index.")
-    plateau_scheduler_metric_name = check_metric_name(plateau_scheduler_metric, name_metrics)
+    plateau_scheduler_metric_name = check_metric_name(plateau_scheduler_metric, metrics._metric_names)
     if plateau_scheduler_metric_name == -1:
         raise ValueError("Invalid plateau_scheduler_metric. It must be either None, a valid metric name or a valid metric index.")
 
@@ -199,10 +203,10 @@ def train_model(
                                                                        val_loader=val_loader, 
                                                                        optimizer=optimizer, 
                                                                        criterion=criterion, 
-                                                                       metrics=fn_metrics,
+                                                                       metrics=metrics,
                                                                        loss_eval_prev=loss_plateau_scheduler)
-        train_results_epoch = {'loss': train_loss, **dict(zip(name_metrics, train_metrics))}
-        val_results_epoch   = {'loss': val_loss, **dict(zip(name_metrics, val_metrics))}
+        train_results_epoch = {'loss': train_loss, **train_metrics}
+        val_results_epoch   = {'loss': val_loss, **val_metrics}
         # if reduce on plateau present, save it, otherwise constant 1.0 (NON MOLTO GENERALE: PREVEDE CHE PLATEAU SIA SECONDO OPTAX IN CHAIN)
         if isinstance(optimizer.opt_state[1], ReduceLROnPlateauState):
             lr_scale = optimizer.opt_state[1].scale.value
@@ -215,11 +219,11 @@ def train_model(
         log_compact = f"Epoch {epoch+1}/{num_epochs} - " + \
               f"Train: {', '.join(f'{k}: {v.item():.4f}' for k,v in train_results_epoch.items())} - " + \
               f"Val: {', '.join(f'{k}: {v.item():.4f}' for k,v in val_results_epoch.items())} - " + \
-              f"LR multiplier: {optimizer.opt_state[1].scale.value:.4f}"
+              f"LR multiplier: {lr_scale:.4f}"
         log_detail = f"Epoch {epoch+1}/{num_epochs} - " + \
               f"Train: {', '.join(f'{k}: {v.item():.8f}' for k,v in train_results_epoch.items())} - " + \
               f"Val: {', '.join(f'{k}: {v.item():.8f}' for k,v in val_results_epoch.items())} - " + \
-              f"LR multiplier: {optimizer.opt_state[1].scale.value:.8f}"
+              f"LR multiplier: {lr_scale:.8f}"
         pbar.set_description(log_compact)
 
         if log_file_path:
@@ -247,24 +251,22 @@ def train_model(
 
     return history
 
-
-def compute(function: Callable, preds: jax.Array, targets: jax.Array, weights: jax.Array) -> jax.Array:
+@nnx.jit
+def compute(loss: nnx.Module, preds: jax.Array, targets: jax.Array, weights: jax.Array) -> jax.Array:
     """
     Auxiliary function to compute a loss, handling both cases where the loss requires weights and where it does not.
     Args:
-        function (Callable): The loss function to compute. It must take as inputs the predictions and targets.
+        loss (nnx.Module): The loss to compute. It must take as inputs the predictions and targets.
         preds (jax.Array): The predicted values.
         targets (jax.Array): The ground truth values.
         weights (jax.Array): The weights generated by the hypernetwork.
     Returns:
         jax.Array: The computed loss value.
     """
-    if 'weights' in inspect.getfullargspec(function).args:
-        return function(preds, targets, weights)
+    if 'weights' in inspect.getfullargspec(loss.__call__).args:
+        return loss(preds, targets, weights)
     else:
-        return function(preds, targets)
-
-compute = nnx.jit(compute, static_argnames=("function",))
+        return loss(preds, targets)
 
 def check_metric_name(metric: Union[str, int, None], name_metrics: Tuple[str]) -> int:
     """

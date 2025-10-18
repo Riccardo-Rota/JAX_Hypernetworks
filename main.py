@@ -25,7 +25,8 @@ from models import MLP
 from training import assign_parameters, EarlyStopping, train_model
 from inference import test_model
 from utils import variables_generator
-from losses import CustomLoss, RRMSE, MAE, l2_loss
+from losses import CustomLoss, L2Loss
+from metrics import RRMSE, MAE, RMSE, MSE
 from models import Siren
 
 
@@ -60,11 +61,14 @@ def main():
 
     batch_size = cfg['dataloader']['batch_size']
 
-    criterion_map = {'l2_loss': l2_loss, 'CustomLoss': CustomLoss}
+    criterion_map = {'l2_loss': L2Loss(), 'CustomLoss': CustomLoss()}
     criterion = criterion_map[cfg['training']['criterion']]
 
-    metrics_map = {'RRMSE': RRMSE, 'MAE': MAE}
-    metrics = {k: metrics_map[k] for k in cfg['training']['metrics']}
+    metrics_map = {'RRMSE': RRMSE(), 'MAE': MAE(), 'RMSE': RMSE(), 'MSE': MSE()}
+    if cfg['training']['metrics'] is None:
+        metrics = None
+    else:
+        metrics = {k: metrics_map[k] for k in cfg['training']['metrics']}
 
     epochs = cfg['training']['epochs']
 
@@ -183,7 +187,7 @@ def main():
         hypernetwork=hypernetwork,
         targetnetwork=targetnetwork,
         loader=test_dataloader,
-        metrics=(RRMSE, MAE),
+        metrics={'RRMSE': RRMSE(), 'RMSE': RMSE(), 'MSE': MSE(), 'MAE': MAE()},
     )
 
     print(f"Test Metrics: {test_metrics}")

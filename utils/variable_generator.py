@@ -1,5 +1,8 @@
 from jax import random
-from typing import Optional
+from typing import Optional, List, Callable, Tuple
+import jax.numpy as jnp
+from omegaconf import DictConfig
+from data import Dataset
 
 #TODO: edit to be consistent with new dataloader
 def variables_generator_beta(N: int, domains: list, key: random.PRNGKey = random.key(0)) -> list:
@@ -78,3 +81,31 @@ def variables_generator(
         dataset[name] = sample
 
     return dataset
+
+def build_function_dataset_from_config(f_to_learn: Callable, mu_domain: Tuple[int, int], l_domain: Tuple[int, int], k_domain: Tuple[int, int], x_domain: Tuple[int, int], N: int, n_realizations: int, key: int=0) -> dict: 
+    #TODO: if this toy example with f_to_learn is kept in the final work, we should modify all the logic to create the dataset
+    f_to_learn = eval(f_to_learn, {"__builtins__": None, "jnp": jnp}) # Safe eval environment, can only access jnp
+    # (without the safe env in line above, it could execute any code, including any malicious code in the config)
+    mu_domain = tuple(mu_domain)
+    l_domain = tuple(l_domain)
+    k_domain = tuple(k_domain)
+    x_domain = tuple(x_domain)
+
+    variables = variables_generator(
+        N=N, n_realizations=n_realizations,
+        var_names=['x'], var_domains=[x_domain],
+        hypervar_domains=[mu_domain, l_domain, k_domain],
+        hypervar_names=['mu', 'l', 'k'], key=random.key(key)
+    )
+    mu, l, k, x = variables.values()
+    y = f_to_learn(mu, l, k, x)
+    X = jnp.stack([mu, l, k, x], axis=1)
+
+    split_idx1 = int(X.shape[0] * 0.8)
+    split_idx2 = int(X.shape[0] * 0.9)
+
+    dataset_train = Dataset(vars=X[:split_idx1, 3], hypervars=X[:split_idx1, :3], labels=y[:split_idx1])
+    dataset_val = Dataset(vars=X[split_idx1:split_idx2, 3], hypervars=X[split_idx1:split_idx2, :3], labels=y[split_idx1:split_idx2])
+    dataset_test = Dataset(vars=X[split_idx2:, 3], hypervars=X[split_idx2:, :3], labels=y[split_idx2:])
+
+    return dataset_train, dataset_val, dataset_test

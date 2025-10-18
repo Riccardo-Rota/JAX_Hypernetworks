@@ -2,52 +2,37 @@ import jax.numpy as jnp
 import optax
 from typing import Callable, Union, Optional, List
 from utils import to_list
+from flax import nnx
 
-#Guidelines for defining losses or metrics:
-# - The arguments passed during the training cycle should be (predictions, targets, weights) or (predictions, targets), all other
+# Guidelines for defining losses:
+# - Each loss should be an instance of nnx.Module
+# - The forward method should return the SUM of the loss over the batch, the averaging should be done outside the loss function
+# - The arguments passed to the forward during the training cycle should be (predictions, targets, weights) or (predictions, targets), all other
 #   arguments should be set as default values
-# - If using a different signature, please modify the compute_metrics helper function in training/train.py accordingly
+# - If using a different signature for the forward method, please modify the compute_metrics helper function in training/train.py accordingly
+
+    
+class L2Loss(nnx.Module):
+    def __init__(self):
+        super().__init__()
+
+    def __call__(self, predictions, targets):
+        """Compute the Mean Squared Error (MSE) between predictions and targets."""
+        return optax.l2_loss(predictions, targets)
 
 
-def RRMSE(predictions, targets, epsilon=1e-8):
+class CustomLoss(nnx.Module):
     """
-    Compute the Relative Root Mean Square Error (RRMSE) between predictions and targets.
-    RRMSE is defined as the RMSE divided by the magnitude of the target values.
+    Customizable loss function that combines L2 loss with optional additional losses and penalties.
     Args:
-        predictions (jax.Array): The predicted values.
-        targets (jax.Array): The true target values.
-        epsilon (float): A small value to avoid division by zero. Default is 1e-8.
-    Returns:
-        jax.Array: The computed RRMSE value.
+    l2_loss_weight (float): Weight for the L2 loss component. Default is 1.0.
+    l1_penalty_weight (float): Weight for the L1 penalty on model weights. Default is 0.0.
+    l2_penalty_weight (float): Weight for the L2 penalty on model weights. Default is 0.0.
+    extra_loss_functions (Callable or List[Callable], optional): Additional loss functions to include.
+    extra_loss_weights (float or List[float], optional): Weights for the additional loss functions.
+    extra_penalty_functions (Callable or List[Callable], optional): Additional penalty functions to include.
+    extra_penalty_weights (float or List[float], optional): Weights for the additional penalty functions.
     """
-    target_magnitude = jnp.sqrt(jnp.mean(targets ** 2)) + epsilon
-    rmse = jnp.sqrt(jnp.mean((predictions - targets) ** 2))
-    rrmse = rmse / target_magnitude
-    return rrmse
-
-def l2_loss(predictions, targets):
-    """
-    Compute the Mean Squared Error (MSE) between predictions and targets.
-    Args:
-        predictions (jax.Array): The predicted values.
-        targets (jax.Array): The true target values.
-    Returns:
-        jax.Array: The computed MSE value.
-    """
-    return jnp.mean(optax.l2_loss(predictions, targets))
-
-def MAE(predictions, targets):
-    """
-    Compute the Mean Absolute Error (MAE) between predictions and targets.
-    Args:
-        predictions (jax.Array): The predicted values.
-        targets (jax.Array): The true target values.
-    Returns:
-        jax.Array: The computed MAE value.
-    """
-    return jnp.mean(jnp.abs(predictions - targets))
-
-class CustomLoss:
     def __init__(self, 
                  l2_loss_weight: float=1.0, 
                  l1_penalty_weight: float=0.0, 
@@ -63,19 +48,28 @@ class CustomLoss:
         self.loss_weights = [l2_loss_weight] + to_list(extra_loss_weights)
         self.loss_functions = [optax.l2_loss] + to_list(extra_loss_functions)
         self.penalty_weights = [l1_penalty_weight, l2_penalty_weight] + to_list(extra_penalty_weights)
-        self.penalty_functions = [lambda w: jnp.mean(jnp.abs(w)), lambda w: jnp.mean(w**2)] + to_list(extra_penalty_functions)
-    
+        self.penalty_functions = [lambda w: jnp.mean(jnp.abs(w), axis=-1), lambda w: jnp.mean(w**2, axis=-1)] + to_list(extra_penalty_functions)
+
     def __call__(self, predictions, targets, weights):
+        """
+        Compute the total loss as a weighted sum of individual losses and penalties.
+        Args:
+            predictions (jax.Array): The predicted values.
+            targets (jax.Array): The true target values.
+            weights (jax.Array): The model weights for penalty computation.
+        Returns:
+            jax.Array: The computed total loss.
+        """
         total_loss = 0.0
 
         # Compute losses
         for weight, loss_fn in zip(self.loss_weights, self.loss_functions):
             if weight != 0.0:
-                total_loss += weight * jnp.mean(loss_fn(predictions, targets))
+                total_loss += weight * jnp.sum(loss_fn(predictions, targets))
         
         # Compute penalties
         for weight, penalty_fn in zip(self.penalty_weights, self.penalty_functions):
             if weight != 0.0:
-                total_loss += weight * penalty_fn(weights)
+                total_loss += weight * jnp.sum(penalty_fn(weights))
         
         return total_loss    

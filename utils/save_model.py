@@ -13,7 +13,7 @@ def save_model(model: nnx.Module, path: str):
     graphdef, state = nnx.split(model)
     save_data = {'graphdef': graphdef, 'state': state}
     checkpointer = ocp.StandardCheckpointer()
-    checkpointer.save(path, args=ocp.args.StandardSave(save_data))
+    checkpointer.save(path, state=state)
 
 def load_model(path: str):
     """

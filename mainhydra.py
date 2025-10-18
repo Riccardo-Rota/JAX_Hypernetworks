@@ -19,11 +19,13 @@ from inference import test_model
 from utils import variables_generator
 from flax import nnx
 import optax
-from losses import CustomLoss, RRMSE, MAE, l2_loss
+from losses import *
+from metrics import *
 import datetime
 from utils import save_model
+import json
 
-@hydra.main(config_path="conf", config_name="config")
+@hydra.main(config_path="config", config_name="config", version_base="1.3")
 def main(cfg: DictConfig) -> None:
     print("Configuration being used:")
     print(OmegaConf.to_yaml(cfg))
@@ -33,26 +35,11 @@ def main(cfg: DictConfig) -> None:
 
     # Dataset Generation (TODO: instantiate from config)
     key = random.key(cfg.seed)
-    f_to_learn = lambda mu, l, k, x: jnp.exp(-l*x) + mu*x + k*x**2
     data_cfg = cfg.data
+    f_to_learn = eval(cfg.data.f_to_learn, {"__builtins__": None, "jnp": jnp})
     mu_domain, l_domain, k_domain, x_domain = map(tuple, [data_cfg.mu_domain, data_cfg.l_domain, data_cfg.k_domain, data_cfg.x_domain])
 
-    variables = variables_generator(
-        N=data_cfg.N, n_realizations=data_cfg.n_realizations,
-        var_names=['x'], var_domains=[x_domain],
-        hypervar_domains=[mu_domain, l_domain, k_domain],
-        hypervar_names=['mu', 'l', 'k'], key=key
-    )
-    mu, l, k, x = variables.values()
-    y = f_to_learn(mu, l, k, x)
-    X = jnp.stack([mu, l, k, x], axis=1)
-
-    split_idx1 = int(X.shape[0] * 0.8)
-    split_idx2 = int(X.shape[0] * 0.9)
-    
-    dataset_train = Dataset(X[:split_idx1, 3], X[:split_idx1, :3], y[:split_idx1])
-    dataset_val = Dataset(X[split_idx1:split_idx2, 3], X[split_idx1:split_idx2, :3], y[split_idx1:split_idx2])
-    dataset_test = Dataset(X[split_idx2:, 3], X[split_idx2:, :3], y[split_idx2:])
+    dataset_train, dataset_val, dataset_test = hydra.utils.instantiate(cfg.data)
 
     train_loader = JaxDataLoader(dataset_train, batch_size=cfg.training.batch_size, shuffle=True)
     val_loader = JaxDataLoader(dataset_val, batch_size=cfg.training.batch_size, shuffle=False)
@@ -63,7 +50,7 @@ def main(cfg: DictConfig) -> None:
     num_params = targetnetwork.num_parameters()
     print(f"Target network '{type(targetnetwork).__name__}' instantiated with {num_params} parameters.")
 
-    OmegaConf.update(cfg.hypernetwork, "config.num_neurons.-1", num_params, merge=False) # Set output layer size to match target network parameters
+    OmegaConf.update(cfg.hypernetwork, "num_neurons.-1", num_params, merge=False) # Set output layer size to match target network parameters
     hypernetwork = hydra.utils.instantiate(cfg.hypernetwork)
     print(f"Hypernetwork '{type(hypernetwork).__name__}' instantiated.")
     
@@ -75,9 +62,11 @@ def main(cfg: DictConfig) -> None:
     # Instantiate optimizer.
     if cfg.optimizer.tx._target_ == 'optax.chain': # For ReduceLROnPlateau, we need to pass accumulation_size
          OmegaConf.update(cfg.optimizer, "tx.transforms.1.accumulation_size", len(val_loader), merge=False)
+    
 
     optimizer = hydra.utils.instantiate(cfg.optimizer, model=hypernetwork)
 
+    print("Starting training...")
     # Run Training
     history = train_model(
         hypernetwork=hypernetwork,
@@ -90,13 +79,13 @@ def main(cfg: DictConfig) -> None:
         metrics=metrics,
         early_stopping=early_stopping
     )
-
+    print("Training completed.")
     # Run Testing
     test_metrics = test_model(
         hypernetwork=hypernetwork,
         targetnetwork=targetnetwork,
         loader=test_loader,
-        metrics=tuple(metrics.values()),
+        metrics=metrics,
     )
     print(f"Test Metrics: {test_metrics}")
 
@@ -147,23 +136,11 @@ def main(cfg: DictConfig) -> None:
 
     # Save model parameters
     hypernetwork_path = 'hypernetwork_params'
-    save_model(hypernetwork, hypernetwork_path)
+    #save_model(hypernetwork, hypernetwork_path)
 
     # Save JSON with all info
     run_data = {
-        'run_name': cfg.run_name,
-        'datetime': datetime.now().isoformat(),
-        'config': cfg,
         'test_metrics': test_metrics,
-        'model': {
-            'num_params_targetnetwork': targetnetwork.num_parameters(),
-            'num_params_hypernetwork': hypernetwork.num_parameters(),
-            'hypernetwork_path': hypernetwork_path,
-        },
-        'plots': {
-            'loss_plot': loss_plot_path,
-            'predictions': prediction_paths
-        },
         'training_history': {
             'train_results': history['train_results'],
             'val_results': history['val_results']
