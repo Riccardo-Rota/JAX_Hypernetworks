@@ -8,8 +8,11 @@ ArrayLike = Union[np.ndarray, jax.Array]
 
 class Dataset:
     """Dataset container for variables, hypervariables, and labels. Data are stored in a dictionary, divided in
-       "hypervariables", "variables" and "labels". Data are kept as numpy arrays, to avoid unnecessary copies. Data are then
-       converted to jax.Arrays by the DataLoader."""
+       "hypervariables", "variables" and "labels"."""
+    # TODO: study if better to jnp.asarray inside __getitem__ instead of __init__ (to save memory if dataset is large and only small batches are used)
+    # TODO: make it NamedTuple or dataclass?
+    # TODO: split method allows only one split ratio, maybe better to allow multiple splits?
+    # TODO: supergeneralized needed?
 
     def __init__(self,
                  vars: ArrayLike,
@@ -48,9 +51,56 @@ class Dataset:
             "labels": labels,
         }
 
+    def shuffle(self, key: jax.Array) -> "Dataset":
+        """
+        Return a new Dataset with shuffled data.
+        
+        Args:
+            key: JAX random key for shuffling
+            
+        Returns:
+            New Dataset instance with shuffled data
+        """
+        indices = jax.random.permutation(key, jnp.arange(len(self)))
+        return Dataset(
+            vars=self.vars[indices],
+            hypervars=self.hypervars[indices],
+            labels=self.labels[indices],
+        )
+    
+    def split(self, split_ratio: float = 0.8, seed: int = 0):
+        """
+        Split dataset into train and validation sets.
+        
+        Args:
+            split_ratio: Fraction of data for training (default: 0.8)
+            seed: Random seed for shuffling before split (optional)
+
+        Returns:
+            Tuple of (train_dataset, val_dataset)
+        """
+        key = jax.random.key(seed)
+        dataset = self.shuffle(key) if key is not None else self
+        split_idx = int(len(self) * split_ratio)
+        
+        train_dataset = Dataset(
+            vars=dataset.vars[:split_idx],
+            hypervars=dataset.hypervars[:split_idx],
+            labels=dataset.labels[:split_idx],
+        )
+        
+        val_dataset = Dataset(
+            vars=dataset.vars[split_idx:],
+            hypervars=dataset.hypervars[split_idx:],
+            labels=dataset.labels[split_idx:],
+        )
+        
+        return train_dataset, val_dataset
+
 class JaxDataLoader:
     """
-    
+    TODO: document
+    TODO: NamedTuple/dataclass to avoid static argument class?
     """
 
     def __init__(self,
