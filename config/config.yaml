@@ -6,34 +6,29 @@ hydra:
     dir: runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
 
 defaults:
-  - _self_
   - training: default
+  - targetnetwork: mlp
+  - hypernetwork: mlp
   - optimizer: adam_cosine_decay
   - data: target_functions
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
+  - _self_
 
 data:
   N: 1000
   n_realizations: 10
 
 targetnetwork:
-  _target_: models.MLP
   num_neurons: [1, 8, 8, 1]
-  activation_functions:
-    - _target_: models.get_tanh
-    - _target_: models.get_tanh
   rngs:
     _target_: flax.nnx.Rngs
     default: 0
 
 hypernetwork:
-  _target_: models.MLP
   num_neurons: [3, 64, 64, 128, null]
   activation_functions:
-    - _target_: models.get_relu
-    - _target_: models.get_relu
-    - _target_: models.get_relu
+    _target_: models.get_relu
   rngs:
     _target_: flax.nnx.Rngs
     default: 0

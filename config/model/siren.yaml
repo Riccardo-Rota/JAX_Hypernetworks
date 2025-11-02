@@ -1,6 +1,0 @@
-_target_: models.Siren
-
-num_neurons: [1, 32, 32, 1]
-kwargs:
-  w0: 30.0
-  w_in: 1.0

@@ -4,5 +4,5 @@ tx:
   learning_rate:
     _target_: optax.schedules.cosine_decay_schedule
     init_value: 1.0e-3
-    decay_steps: 10000
+    decay_steps: ${compute_train_steps:${training.epochs}, ${data.N}, ${training.batch_size}, ${data.n_realizations}}
     alpha: 0.0
