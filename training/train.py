@@ -22,7 +22,7 @@ def perform_step(
     hypervariables: jax.Array, 
     x: jax.Array, 
     y: jax.Array, 
-    criterion: Callable = optax.l2_loss,
+    criterion: nnx.Module = L2Loss(),
     evaluation: bool = False,
     optimizer: Optional[nnx.Optimizer] = None,
     loss_eval_prev: Optional[float] = None
@@ -181,7 +181,7 @@ def train_model(
         else:
             raise ValueError("metrics must be either a MultiMetric instance, a dictionary of metrics, or None.")
 
-    history = {'train_results': [], 'val_results': [],  'lrs': []} # TODO: initializza anche lrs
+    history = {'train_results': [], 'val_results': [],  'lrs': []}
 
     early_stopping_metric_name = check_metric_name(early_stopping_metric, metrics._metric_names)
     if early_stopping_metric_name == -1:
