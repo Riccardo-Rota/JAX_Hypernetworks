@@ -1,0 +1,4 @@
+- data.N=100
+- data.n_realizations=1
+- targetnetwork=siren
+- targetnetwork.num_neurons=[1,32,32,1]

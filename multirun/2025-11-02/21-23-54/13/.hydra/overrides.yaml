@@ -1,0 +1,4 @@
+- data.N=1000
+- data.n_realizations=1
+- targetnetwork=mlp
+- targetnetwork.num_neurons=[1,32,32,1]
