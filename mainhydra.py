@@ -163,6 +163,8 @@ def main(cfg: DictConfig) -> None:
         'training_time_seconds': end_time - start_time,
         'time_per_epoch_seconds': (end_time - start_time) / len(history['train_results']),
         'train_dataset_size': len(dataset_train),
+        'N': cfg.data.N,
+        'n_realizations': cfg.data.n_realizations,
         'hypernetwork': {
             'type': type(hypernetwork).__name__,
             'num_parameters': hypernetwork.num_parameters(),
