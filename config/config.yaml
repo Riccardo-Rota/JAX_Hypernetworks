@@ -33,6 +33,11 @@ hypernetwork:
     _target_: flax.nnx.Rngs
     default: 0
 
+training:
+  epochs: 10000
+  learning_rate: 1.0e-3
+  batch_size: 1024
+
 inference:
   N_examples: 4
 

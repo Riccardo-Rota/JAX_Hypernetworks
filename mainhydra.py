@@ -35,7 +35,14 @@ def compute_train_steps(num_epochs: int, N: int, batch_size: int, n_realizations
         batch_size = 1
     return int((num_epochs * N * n_realizations) / min(batch_size, N * n_realizations))
 
+def product(lst):
+    result = 1
+    for item in lst:
+        result *= item
+    return result
+
 OmegaConf.register_new_resolver("compute_train_steps", compute_train_steps)
+OmegaConf.register_new_resolver("product", product)
 
 @hydra.main(config_path="config", config_name="config", version_base="1.3")
 def main(cfg: DictConfig) -> None:
@@ -69,10 +76,6 @@ def main(cfg: DictConfig) -> None:
     criterion = hydra.utils.instantiate(cfg.training.criterion)
     metrics = {name: hydra.utils.instantiate(metric_cfg) for name, metric_cfg in cfg.training.metrics.items()}
     early_stopping = hydra.utils.instantiate(cfg.training.early_stopping)
-
-    # Instantiate optimizer
-    if cfg.optimizer.tx._target_ == 'optax.chain': # For ReduceLROnPlateau, we need to pass accumulation_size
-         OmegaConf.update(cfg.optimizer, "tx.transforms.1.accumulation_size", len(val_loader), merge=False)
     
 
     optimizer = hydra.utils.instantiate(cfg.optimizer, model=hypernetwork)
@@ -112,7 +115,16 @@ def main(cfg: DictConfig) -> None:
     plt.xlabel('Epochs')
     plt.ylabel('MSE Loss')
     plt.legend()
-    loss_plot_path = 'loss_plot.png'
+    loss_plot_path = 'loss_plot_loglog.png'
+    plt.savefig(loss_plot_path)
+    plt.close()
+    plt.figure()
+    plt.semilogx(range(len(training_loss_history)), training_loss_history, label='Training Loss')
+    plt.semilogx(range(len(val_loss_history)), val_loss_history, label='Validation Loss')
+    plt.xlabel('Epochs')
+    plt.ylabel('MSE Loss')
+    plt.legend()
+    loss_plot_path = 'loss_plot_semilogx.png'
     plt.savefig(loss_plot_path)
     plt.close()
 
