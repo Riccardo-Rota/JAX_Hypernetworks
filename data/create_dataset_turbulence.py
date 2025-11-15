@@ -1,10 +1,11 @@
-from data import Dataset
 import h5py
 import numpy as np
 
-def create_dataset_turbulence(path: str = 'turbulent_radiative_layer_tcool_0.10.hdf5', num_labels: int = 4, num_data: int = 1000, trajectory: int = 0) -> Dataset:
+def create_dataset_turbulence(path: str = 'turbulent_radiative_layer_tcool_0.10.hdf5', npy_path: str = 'turbulent_radiative_layer_tcool_0.10.npy', num_labels: int = 4, trajectory: int = 0, seed: int = 42) -> np.ndarray:
+    #TODO: Add docstring
+    # From .hdf5 file, create a .npy dataset
 
-    if num_labels >4:
+    if num_labels > 4:
         raise ValueError("num_labels cannot be greater than 4 (density, pressure, vel_x, vel_y)")
 
     # Extract datasets for density, pressure and velocity
@@ -30,5 +31,10 @@ def create_dataset_turbulence(path: str = 'turbulent_radiative_layer_tcool_0.10.
 
     # Create final dataset: (time, x, y, density, pressure, vel_x, vel_y)
     dataset_array = np.concatenate([T_flat[..., np.newaxis], X_flat[..., np.newaxis], Y_flat[..., np.newaxis], labels_reshaped], axis=-1)
-    dataset = Dataset(vars = dataset_array[:num_data,1:3], hypervars = dataset_array[:num_data,0], labels = dataset_array[:num_data,3:3+num_labels])
-    return dataset
+
+    # Shuffle the entire dataset once before saving
+    rng = np.random.default_rng(seed)
+    shuffled_indices = rng.permutation(len(dataset_array))
+    dataset_array = dataset_array[shuffled_indices]
+    
+    np.save(npy_path, dataset_array)

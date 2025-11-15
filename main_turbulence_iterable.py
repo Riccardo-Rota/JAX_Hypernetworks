@@ -10,6 +10,7 @@ if 'JAX_PLATFORMS' not in os.environ:
         os.environ['JAX_PLATFORMS'] = 'cpu'
 
 from datetime import datetime
+import numpy as np
 import yaml
 import json
 import jax.numpy as jnp
@@ -20,7 +21,7 @@ import optax
 import orbax.checkpoint as ocp
 from flax import serialization
 import copy
-from data import Dataset, JaxDataLoader
+from data import IterableDataset, IterableJaxDataLoader
 from models import MLP
 from training import assign_parameters, EarlyStopping, train_model
 from inference import test_model
@@ -81,13 +82,23 @@ def main():
     # -------------------------------
     # Dataset loading
     # -------------------------------
-    dataset = create_dataset_turbulence(path='data/turbulent_radiative_layer_tcool_0.10.hdf5', num_labels=4, trajectory=0)
-    print(dataset.length)
+    # Extract dataset length
+    npy_path = 'data/turbulent_radiative_layer_tcool_0.10.npy'
+    field_specs = {
+        'vars': [1,2],
+        'hypervars': [0],
+        'labels': [3,4,5,6]
+    }
+    training_ratio = 0.8
+    tmp = np.load(npy_path, mmap_mode="r")
+    N = tmp.shape[0]
+    del tmp
+    train_dataset = IterableDataset(npy_path = npy_path, field_specs = field_specs, shuffle = True, seed=0, start=0, stop=int(training_ratio*N))
+    val_dataset = IterableDataset(npy_path = npy_path, field_specs = field_specs, shuffle = False, seed=0, start=int(training_ratio*N), stop=N)
 
-    train_dataset, val_dataset = dataset.split(split_ratio=0.8, seed=10)
-
-    train_dataloader = JaxDataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_dataloader = JaxDataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    # Create dataloaders
+    train_dataloader = IterableJaxDataLoader(train_dataset, batch_size=batch_size)
+    val_dataloader = IterableJaxDataLoader(val_dataset, batch_size=batch_size)
 
     # -------------------------------
     # Model initialization
