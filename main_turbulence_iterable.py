@@ -21,7 +21,7 @@ import optax
 import orbax.checkpoint as ocp
 from flax import serialization
 import copy
-from data import IterableDataset, IterableJaxDataLoader
+from data import Dataset, JaxDataLoader
 from models import MLP
 from training import assign_parameters, EarlyStopping, train_model
 from inference import test_model
@@ -83,22 +83,20 @@ def main():
     # Dataset loading
     # -------------------------------
     # Extract dataset length
-    npy_path = 'data/turbulent_radiative_layer_tcool_0.10.npy'
-    field_specs = {
+    train_path = 'data/train.npy'
+    val_path = 'data/val.npy'
+    column_map = {
         'vars': [1,2],
         'hypervars': [0],
         'labels': [3,4,5,6]
     }
-    training_ratio = 0.8
-    tmp = np.load(npy_path, mmap_mode="r")
-    N = tmp.shape[0]
-    del tmp
-    train_dataset = IterableDataset(npy_path = npy_path, field_specs = field_specs, shuffle = True, seed=0, start=0, stop=int(training_ratio*N))
-    val_dataset = IterableDataset(npy_path = npy_path, field_specs = field_specs, shuffle = False, seed=0, start=int(training_ratio*N), stop=N)
+    
+    train_dataset = Dataset.from_npy(train_path, column_map)
+    val_dataset = Dataset.from_npy(val_path, column_map)
 
     # Create dataloaders
-    train_dataloader = IterableJaxDataLoader(train_dataset, batch_size=batch_size)
-    val_dataloader = IterableJaxDataLoader(val_dataset, batch_size=batch_size)
+    train_dataloader = JaxDataLoader(train_dataset, batch_size=batch_size)
+    val_dataloader = JaxDataLoader(val_dataset, batch_size=batch_size)
 
     # -------------------------------
     # Model initialization
