@@ -1,7 +1,7 @@
 import h5py
 import numpy as np
 
-def create_dataset_turbulence(path: str = 'turbulent_radiative_layer_tcool_0.10.hdf5', npy_path: str = 'turbulent_radiative_layer_tcool_0.10.npy', num_labels: int = 4, trajectory: int = 0, seed: int = 42) -> np.ndarray:
+def create_dataset_turbulence(path: str = 'turbulent_radiative_layer_tcool_0.10.hdf5', npy_path: str = 'turbulent_radiative_layer_tcool_0.10.npy', num_labels: int = 4, trajectory: int = 0, seed: int = 42) -> None:
     #TODO: Add docstring
     # From .hdf5 file, create a .npy dataset
 
@@ -38,3 +38,35 @@ def create_dataset_turbulence(path: str = 'turbulent_radiative_layer_tcool_0.10.
     dataset_array = dataset_array[shuffled_indices]
     
     np.save(npy_path, dataset_array)
+
+def split_dataset_turbulence(npy_path: str = 'turbulent_radiative_layer_tcool_0.10.npy', train_path: str = 'turbulent_radiative_layer_tcool_0.10_train.npy', val_path: str = 'turbulent_radiative_layer_tcool_0.10_val.npy', test_path: str = 'turbulent_radiative_layer_tcool_0.10_test.npy', train_frac: float = 0.7, val_frac: float = 0.15, test_frac: float = 0.15, seed: int = 42) -> None:
+    #TODO: Add docstring
+    # Split .npy dataset into train, val and test
+
+    # Normalize fractions if they don't sum to 1
+    if not np.isclose(train_frac + val_frac + test_frac, 1.0):
+        train_frac = train_frac / (train_frac + val_frac + test_frac)
+        val_frac = val_frac / (train_frac + val_frac + test_frac)
+        test_frac = test_frac / (train_frac + val_frac + test_frac)
+    
+    # Load and shuffle dataset
+    data = np.load(npy_path)
+    n_samples = data.shape[0]
+    rng = np.random.default_rng(seed)
+    indices = rng.permutation(n_samples)
+    data = data[indices]
+
+    # Get split indices
+    train_end = int(train_frac * n_samples)
+    val_end = train_end + int(val_frac * n_samples)
+    test_end = val_end + int(test_frac * n_samples)
+
+    # Split the data
+    train_data = data[:train_end]
+    val_data = data[train_end:val_end]
+    test_data = data[val_end:test_end]
+
+    # Save the splits
+    np.save(train_path, train_data)
+    np.save(val_path, val_data)
+    np.save(test_path, test_data)
