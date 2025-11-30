@@ -138,7 +138,7 @@ def perform_epoch(
 
     return train_loss_epoch, train_metrics.compute(), val_loss_epoch, val_metrics.compute()
 
-perform_epoch = nnx.jit(perform_epoch, static_argnames=("train_loader", "val_loader"))
+#perform_epoch = nnx.jit(perform_epoch, static_argnames=("train_loader", "val_loader"))
 
 def train_model(
         hypernetwork: nnx.Module,
