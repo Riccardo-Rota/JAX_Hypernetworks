@@ -76,7 +76,7 @@ def main(cfg: DictConfig) -> None:
     criterion = hydra.utils.instantiate(cfg.training.criterion)
     metrics = {name: hydra.utils.instantiate(metric_cfg) for name, metric_cfg in cfg.training.metrics.items()}
     early_stopping = hydra.utils.instantiate(cfg.training.early_stopping)
-    
+    log_path = os.path.join(run_path, 'training_log.txt')
 
     optimizer = hydra.utils.instantiate(cfg.optimizer, model=hypernetwork)
 
@@ -92,7 +92,8 @@ def main(cfg: DictConfig) -> None:
         num_epochs=cfg.training.epochs,
         criterion=criterion,
         metrics=metrics,
-        early_stopping=early_stopping
+        early_stopping=early_stopping,
+        log_file_path=log_path
     )
     end_time = time.time()
     print("Training completed.")

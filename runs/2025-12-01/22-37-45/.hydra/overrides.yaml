@@ -1,0 +1,4 @@
+- optimizer=adam_constant_clipping
+- training.learning_rate=5e-2
+- training.epochs=10
+- data.N=10000

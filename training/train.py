@@ -197,6 +197,7 @@ def train_model(
 
     pbar = tqdm(range(num_epochs))
     for epoch in pbar:
+        metrics.reset()
         train_loss, train_metrics, val_loss, val_metrics = perform_epoch(hypernetwork=hypernetwork,
                                                                        targetnetwork=targetnetwork,
                                                                        train_loader=train_loader, 
@@ -215,11 +216,13 @@ def train_model(
         history['train_results'].append(train_results_epoch)
         history['val_results'].append(val_results_epoch)
         history['lrs'].append(lr_scale)
-        # save lrs if we have reduce on plateau
-        log_compact = f"Epoch {epoch+1}/{num_epochs} - " + \
-              f"Train: {', '.join(f'{k}: {v.item():.4f}' for k,v in train_results_epoch.items())} - " + \
-              f"Val: {', '.join(f'{k}: {v.item():.4f}' for k,v in val_results_epoch.items())} - " + \
-              f"LR multiplier: {lr_scale:.4f}"
+    
+        log_compact = (
+            f"Epoch {epoch+1}/{num_epochs} - "
+            f"Train: {compact_format(train_results_epoch)} - "
+            f"Val: {compact_format(val_results_epoch)} - "
+            f"LR Multiplier: {lr_scale:.4f}"
+        )
         log_detail = f"Epoch {epoch+1}/{num_epochs} - " + \
               f"Train: {', '.join(f'{k}: {v.item():.8f}' for k,v in train_results_epoch.items())} - " + \
               f"Val: {', '.join(f'{k}: {v.item():.8f}' for k,v in val_results_epoch.items())} - " + \
@@ -289,3 +292,7 @@ def check_metric_name(metric: Union[str, int, None], name_metrics: Tuple[str]) -
         return name_metrics[metric]
     else:
         return -1
+    
+def compact_format(metrics_dict, k=2):
+        items = list(metrics_dict.items())[:k] 
+        return ', '.join(f'{key}: {val.item():.4f}' for key, val in items)

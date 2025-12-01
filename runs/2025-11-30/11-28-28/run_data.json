@@ -1,0 +1,67 @@
+{
+    "f_to_learn": "lambda mu, l, k, x: jnp.exp(-l*x) + mu*x + jnp.sin(k*x)",
+    "test_metrics": {
+        "RRMSE": 8.52214241027832,
+        "MAE": 6.572507858276367,
+        "RMSE": 10.188089370727539
+    },
+    "val_metrics": {
+        "loss": 4.864017009735107,
+        "MAE": 2.334789514541626,
+        "RMSE": 3.1189794540405273,
+        "RRMSE": 2.612570285797119
+    },
+    "train_metrics": {
+        "loss": 57.69026565551758,
+        "MAE": 7.083549499511719,
+        "RMSE": 10.741532325744629,
+        "RRMSE": 8.960883140563965
+    },
+    "early_stopping_triggered": false,
+    "num_epochs": 1,
+    "best_epoch": 0,
+    "training_time_seconds": 3.8709969520568848,
+    "time_per_epoch_seconds": 3.8709969520568848,
+    "train_dataset_size": 8000,
+    "N": 1000,
+    "n_realizations": 10,
+    "hypernetwork": {
+        "type": "MLP",
+        "num_parameters": 25249,
+        "num_neurons": [
+            3,
+            64,
+            64,
+            128,
+            97
+        ]
+    },
+    "targetnetwork": {
+        "type": "MLP",
+        "num_parameters": 97,
+        "num_neurons": [
+            1,
+            8,
+            8,
+            1
+        ]
+    },
+    "training_history": {
+        "train_results": [
+            {
+                "loss": 57.69026565551758,
+                "MAE": 7.083549499511719,
+                "RMSE": 10.741532325744629,
+                "RRMSE": 8.960883140563965
+            }
+        ],
+        "val_results": [
+            {
+                "loss": 4.864017009735107,
+                "MAE": 2.334789514541626,
+                "RMSE": 3.1189794540405273,
+                "RRMSE": 2.612570285797119
+            }
+        ]
+    }
+}
