@@ -56,6 +56,25 @@ class Dataset:
     def __len__(self) -> int:
         return self.length
     
+    def dim_vars(self) -> int:
+        """Returns number of features in vars."""
+        if self._mode == "combined":
+            return len(self._vars_idx)
+        # In separated mode: handle 1D arrays (shape (N,)) as 1 feature
+        return 1 if self.vars.ndim == 1 else self.vars.shape[-1]
+
+    def dim_hypervars(self) -> int:
+        """Returns number of features in hypervars."""
+        if self._mode == "combined":
+            return len(self._hypervars_idx)
+        return 1 if self.hypervars.ndim == 1 else self.hypervars.shape[-1]
+
+    def dim_labels(self) -> int:
+        """Returns number of features in labels."""
+        if self._mode == "combined":
+            return len(self._labels_idx)
+        return 1 if self.labels.ndim == 1 else self.labels.shape[-1]
+    
     def _normalize_index(self, idx: Union[int, ArrayLike]):
         # Cast index to numpy array if it's a JAX array (otherwise no compatibility with numpy data)
         if isinstance(idx, jax.Array):

@@ -1,21 +1,24 @@
 import h5py
 import numpy as np
+from data import Dataset
 
-def create_dataset_turbulence(path: str = 'turbulent_radiative_layer_tcool_0.10.hdf5', npy_path: str = 'turbulent_radiative_layer_tcool_0.10.npy', num_labels: int = 4, trajectory: int = 0, seed: int = 42) -> None:
+def create_dataset_turbulence(path: str = 'turbulent_radiative_layer_tcool_0.10.hdf5', num_labels: int = 4, trajectory_index: int = 0, train_ratio:float = 0.7, validation_ratio: float = 0.15, test_ratio: float = 0.15, seed: int = 42, *, npy_path: str = None) -> tuple[Dataset, Dataset, Dataset] | None:
     #TODO: Add docstring
     # From .hdf5 file, create a .npy dataset
 
     if num_labels > 4:
         raise ValueError("num_labels cannot be greater than 4 (density, pressure, vel_x, vel_y)")
+    if not np.isclose(train_ratio + validation_ratio + test_ratio, 1.0):
+        raise ValueError(f"Split ratios must sum to 1. Got {train_ratio + validation_ratio + test_ratio}")
 
     # Extract datasets for density, pressure and velocity
     with h5py.File(path, 'r') as f:
         time_points = f["dimensions"]['time'][:]
         x_points = f["dimensions"]['x'][:]
         y_points = f["dimensions"]['y'][:]
-        density = f["t0_fields"]["density"][trajectory]  # shape (n_timesteps, x, y)
-        pressure = f["t0_fields"]["pressure"][trajectory]  # shape (n_timesteps, x, y)
-        velocity = f["t1_fields"]["velocity"][trajectory]  # shape (n_timesteps, x, y, 2)
+        density = f["t0_fields"]["density"][trajectory_index]  # shape (n_timesteps, x, y)
+        pressure = f["t0_fields"]["pressure"][trajectory_index]  # shape (n_timesteps, x, y)
+        velocity = f["t1_fields"]["velocity"][trajectory_index]  # shape (n_timesteps, x, y, 2)
 
     labels = np.concatenate([density[..., np.newaxis], pressure[..., np.newaxis], velocity], axis=-1)
     # Reshape labels to (n_timesteps*x*y, 4)
@@ -37,9 +40,32 @@ def create_dataset_turbulence(path: str = 'turbulent_radiative_layer_tcool_0.10.
     shuffled_indices = rng.permutation(len(dataset_array))
     dataset_array = dataset_array[shuffled_indices]
     
-    np.save(npy_path, dataset_array)
+    if npy_path is not None:
+        np.save(npy_path, dataset_array)
+        return
+    
+    vars = dataset_array[:, [1, 2]]          # x, y
+    hypervars = dataset_array[:, [0]]        # time
+    labels = dataset_array[:, 3:3+num_labels]  # density, pressure
 
-def split_dataset_turbulence(npy_path: str = 'turbulent_radiative_layer_tcool_0.10.npy', train_path: str = 'turbulent_radiative_layer_tcool_0.10_train.npy', val_path: str = 'turbulent_radiative_layer_tcool_0.10_val.npy', test_path: str = 'turbulent_radiative_layer_tcool_0.10_test.npy', train_frac: float = 0.7, val_frac: float = 0.15, test_frac: float = 0.15, seed: int = 42) -> None:
+    N = vars.shape[0]
+    n_train = int(N*train_ratio)
+    n_val = int(N * validation_ratio)
+
+    train_dataset = Dataset(vars=vars[:n_train],
+                            hypervars=hypervars[:n_train],
+                            labels=labels[:n_train])
+    val_dataset = Dataset(vars=vars[n_train:n_train+n_val],
+                          hypervars=hypervars[n_train:n_train+n_val],
+                          labels=labels[n_train:n_train+n_val])
+    test_dataset = Dataset(vars=vars[n_train+n_val:],
+                           hypervars=hypervars[n_train+n_val:],
+                           labels=labels[n_train+n_val:])
+
+    return train_dataset, val_dataset, test_dataset
+
+
+def split_dataset_turbulence_npy(npy_path: str = 'turbulent_radiative_layer_tcool_0.10.npy', train_path: str = 'turbulent_radiative_layer_tcool_0.10_train.npy', val_path: str = 'turbulent_radiative_layer_tcool_0.10_val.npy', test_path: str = 'turbulent_radiative_layer_tcool_0.10_test.npy', train_frac: float = 0.7, val_frac: float = 0.15, test_frac: float = 0.15, seed: int = 42) -> None:
     #TODO: Add docstring
     # Split .npy dataset into train, val and test
 
