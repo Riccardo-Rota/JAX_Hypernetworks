@@ -114,8 +114,10 @@ class Siren(nnx.Module):
         w0_last: float = 30,
         w0_other: float = 30,
         rngs: nnx.Rngs,
+        replace_weights: bool = False
         ):
-                
+        
+        self.replace_weights = replace_weights
         self.layers = list()
         for i_layer in range(len(num_neurons)-1):
             if i_layer == 0:
@@ -151,3 +153,27 @@ class Siren(nnx.Module):
 # - sinusoidal activation functions taken after a rescaling (line 103)
 # - weights initialized from uniform [-1,1] amd rescaled with a specific formula (line 78 for 1st layer, line 80 for others)
 # bias initialized with zeros (nothing special, but I say it for the sake of completeness)
+
+class SirenHead(nnx.Module):
+    """
+    Module to take a latent space outputed from a hypernetwork and map it to the weights of a Siren network.
+    Outputs are rescaled accordingly to Siren initialization.
+    """
+    def __init__(self,
+        siren: Siren,
+        latent_dim: int,
+        *,
+        rngs: nnx.Rngs,
+        ):
+        
+        self.siren = siren
+        self.latent_dim = latent_dim
+        self.total_params = siren.num_parameters()
+
+        # Define a simple FCNN to map latent space to siren weights
+        self.mapper = FCNN(
+            num_neurons = [latent_dim, 128, 256, self.total_params],
+            kernel_init = "he_uniform",
+            bias_init = nnx.initializers.zeros_init(),
+            rngs = rngs
+        )

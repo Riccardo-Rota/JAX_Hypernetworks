@@ -30,7 +30,8 @@ class MLP(nnx.Module):
         activation_functions: Union[Callable, Sequence[Callable]] = nnx.relu,
         kernel_init: Initializer = nnx.initializers.lecun_normal(),
         bias_init: Initializer = nnx.initializers.zeros_init(),
-        rngs: nnx.Rngs = nnx.Rngs(0)
+        rngs: nnx.Rngs = nnx.Rngs(0),
+        apply_init_output_layer: bool = True,
     ):
         """
         Initializes the MLP with the specified parameters.
@@ -43,15 +44,24 @@ class MLP(nnx.Module):
             kernel_init (Initializer, optional): Initializer for the weights. Default: nnx.initializers.lecun_normal().
             bias_init (Initializer, optional): Initializer for the biases. Default: nnx.initializers.zeros_init().
             rngs (nnx.Rngs): Random number generators used to initialize the network. Default: nnx.Rngs(0).
+            zero_init_output_layer (bool, optional): If True, initializes the output layer weights and biases to zero. Default: False.
         """
 
         if type(kernel_init) == str:
             kernel_init = get_initializer(kernel_init)
+        
+        if type(bias_init) == str:
+            bias_init = get_initializer(bias_init)
 
         self.layers = [
             nnx.Linear(num_neurons[i], num_neurons[i+1], rngs=rngs, kernel_init = kernel_init, bias_init = bias_init)
-            for i in range(len(num_neurons) - 1)]
+            for i in range(len(num_neurons) - 2)]
         
+        last_kernel_init = kernel_init if apply_init_output_layer else nnx.initializers.zeros_init()
+        last_bias_init = bias_init if apply_init_output_layer else nnx.initializers.zeros_init()
+        output_layer = nnx.Linear(num_neurons[-2], num_neurons[-1], rngs=rngs, kernel_init = last_kernel_init, bias_init = last_bias_init)
+        self.layers.append(output_layer)
+
         if isinstance(activation_functions, Sequence):
             self.activation_functions = activation_functions
         else:

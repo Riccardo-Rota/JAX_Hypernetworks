@@ -6,3 +6,4 @@ activation_functions:
 rngs:
   _target_: flax.nnx.Rngs
   default: 0
+replace_weights: true

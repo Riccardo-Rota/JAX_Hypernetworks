@@ -32,6 +32,7 @@ hypernetwork:
   rngs:
     _target_: flax.nnx.Rngs
     default: 0
+  apply_init_output_layer: ${targetnetwork.replace_weights}
 
 training:
   epochs: 3000

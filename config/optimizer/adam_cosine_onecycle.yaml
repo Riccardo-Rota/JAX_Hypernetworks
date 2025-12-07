@@ -1,0 +1,10 @@
+_target_: flax.nnx.Optimizer
+tx:
+  _target_: optax.adam
+  learning_rate:
+    _target_: optax.schedules.cosine_onecycle_schedule
+    peak_value: ${training.learning_rate}
+    pct_start: 0.1
+    div_factor: 25.0
+    final_div_factor: 10000.0
+    transition_steps: ${compute_train_steps:${training.epochs}, ${data.N}, ${training.batch_size}, ${data.n_realizations}}

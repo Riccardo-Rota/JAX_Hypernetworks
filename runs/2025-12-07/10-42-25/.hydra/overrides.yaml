@@ -1,0 +1,3 @@
+- optimizer=adam_cosine_decay
+- training.epochs=10
+- data.N=100

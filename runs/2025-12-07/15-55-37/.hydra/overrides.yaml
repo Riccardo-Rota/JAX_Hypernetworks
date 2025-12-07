@@ -1,0 +1,6 @@
+- data.N=1000
+- data.n_realizations=10
+- targetnetwork=siren
+- targetnetwork.num_neurons=[1,32,32,1]
+- optimizer=adam_cosine_onecycle
+- training.learning_rate=5.0e-3

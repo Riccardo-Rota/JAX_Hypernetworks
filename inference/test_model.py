@@ -31,15 +31,15 @@ def test_model(
         else:
             raise ValueError("metrics must be either a MultiMetric instance, a dictionary of metrics, or None.")
 
+    replace = getattr(targetnetwork, 'replace_weights', True)
     for data in tqdm(loader, desc="Testing"):
         y = data['labels'] # y
         hypervariables = data['hypervars'] # mu, l, k
         x = data['vars'] # x
         w = hypernetwork(hypervariables)
         graphdef, template_state = nnx.split(targetnetwork)
-        state = nnx.vmap(build_state_from_parameters, in_axes=(None, 0), out_axes=0)(template_state, w)
+        state = nnx.vmap(build_state_from_parameters, in_axes=(None, 0, None), out_axes=0)(template_state, w, replace)
         modified_targetnetwork = nnx.merge(graphdef, state)
         pred = nnx.vmap(type(modified_targetnetwork).__call__)(modified_targetnetwork, x)
-        modified_targetnetwork = nnx.merge(graphdef, state)
         metrics.update(predictions=pred, targets=y)
     return metrics.compute()

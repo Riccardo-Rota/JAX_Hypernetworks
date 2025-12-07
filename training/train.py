@@ -46,10 +46,10 @@ def perform_step(
     """
     def forward_pass(hypernetwork, hypervariables, x, y):
         w = hypernetwork(hypervariables)
-        graphdef, template_state = nnx.split(targetnetwork)
-        state = nnx.vmap(build_state_from_parameters, in_axes=(None, 0), out_axes=0)(template_state, w)
+        graphdef, previous_state = nnx.split(targetnetwork) 
+        replace = getattr(targetnetwork, 'replace_weights', True)
+        state = nnx.vmap(build_state_from_parameters, in_axes=(None, 0, None), out_axes=0)(previous_state, w, replace=replace) 
         modified_targetnetwork = nnx.merge(graphdef, state)
-
         pred = nnx.vmap(type(modified_targetnetwork).__call__)(modified_targetnetwork, x)
         if 'weights' in inspect.getfullargspec(criterion.__call__).args:
             loss = jnp.mean(criterion(pred, y, w))
@@ -244,8 +244,10 @@ def train_model(
                 if log_file_path:
                     with open(log_file_path, "a") as f:
                         f.write(f"Early stopping at epoch {epoch+1}. Best epoch was {early_stopping.best_epoch+1} with loss {early_stopping.best_loss:.8f}.\n")
-                if early_stopping.best_model:
-                    hypernetwork = early_stopping.best_model
+                # if early_stopping.best_model:
+                #     hypernetwork = early_stopping.best_model
+                if early_stopping.best_state:
+                    nnx.update(hypernetwork, early_stopping.best_state)
                 break
 
     if log_file_path:

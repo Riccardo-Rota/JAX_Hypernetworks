@@ -7,7 +7,8 @@ class EarlyStopping:
         self.min_delta = min_delta
         self.best_loss = float('inf')
         self.best_epoch = 0
-        self.best_model = None
+        #self.best_model = None
+        self.best_state = None
         self.counter = 0
         self.should_stop = False
 
@@ -15,7 +16,8 @@ class EarlyStopping:
         if current_loss < self.best_loss - self.min_delta:
             self.best_loss = current_loss
             self.best_epoch = current_epoch
-            self.best_model = copy.deepcopy(current_model) # Copy by value, not reference
+            #self.best_model = copy.deepcopy(current_model) # Copy by value, not reference
+            self.best_state = nnx.state(current_model)
             self.counter = 0
 
         else:
@@ -26,6 +28,7 @@ class EarlyStopping:
     def reset(self):
         self.best_loss = float('inf')
         self.best_epoch = 0
-        self.best_model = None
+        #self.best_model = None
+        self.best_state = None
         self.counter = 0
         self.should_stop = False
