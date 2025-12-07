@@ -1,0 +1,38 @@
+hydra:
+  job:
+    name: default # change name if needed
+    chdir: true
+  run:
+    dir: runs_turbulence/${now:%Y-%m-%d}/${now:%H-%M-%S}
+
+defaults:
+  - training: default
+  - targetnetwork: mlp
+  - hypernetwork: mlp
+  - optimizer: adam_cosine_decay
+  - data: static_dataset
+  - override hydra/job_logging: colorlog
+  - override hydra/hydra_logging: colorlog
+  - _self_
+
+targetnetwork:
+  num_neurons: [null, 8, 8, null]
+  rngs:
+    _target_: flax.nnx.Rngs
+    default: 0
+
+hypernetwork:
+  num_neurons: [null, 64, 64, 128, null]
+  activation_functions:
+    _target_: models.get_relu
+  rngs:
+    _target_: flax.nnx.Rngs
+    default: 0
+
+training:
+  epochs: 10
+  learning_rate: 1.0e-3
+  batch_size: 1024
+
+N: null
+seed: 0

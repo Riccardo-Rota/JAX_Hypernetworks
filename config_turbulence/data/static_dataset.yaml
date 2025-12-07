@@ -1,0 +1,9 @@
+_target_: data.create_dataset_turbulence
+path: ${hydra:runtime.cwd}/data/turbulent_radiative_layer_tcool_0.10.hdf5
+num_labels: 4
+trajectory_index: 0
+train_ratio: 0.7
+validation_ratio: 0.15
+test_ratio: 0.15
+seed: ${seed}
+npy_path: null

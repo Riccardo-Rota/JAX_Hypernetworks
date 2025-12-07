@@ -1,0 +1,8 @@
+_target_: flax.nnx.Optimizer
+tx:
+  _target_: optax.adam
+  learning_rate:
+    _target_: optax.schedules.cosine_decay_schedule
+    init_value: ${training.learning_rate}
+    decay_steps: ${compute_train_steps:${training.epochs}, ${N}, ${training.batch_size}}
+    alpha: 0.0

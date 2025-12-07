@@ -1,0 +1,9 @@
+_target_: models.Siren
+
+num_neurons: [null, 64, 64, null]
+w0_first: 30.0
+w0_last: 30.0
+w0_other: 30.0
+rngs:
+  _target_: flax.nnx.Rngs
+  default: ${seed}
