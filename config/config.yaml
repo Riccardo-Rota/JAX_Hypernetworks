@@ -9,7 +9,7 @@ defaults:
   - training: default
   - targetnetwork: mlp
   - hypernetwork: mlp
-  - optimizer: adam_cosine_decay
+  - optimizer: adam_cosine_onecycle
   - data: target_functions
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
@@ -35,7 +35,7 @@ hypernetwork:
   apply_init_output_layer: ${targetnetwork.replace_weights}
 
 training:
-  epochs: 3000
+  epochs: 2000
   learning_rate: 1.0e-3
   batch_size: 1024
 

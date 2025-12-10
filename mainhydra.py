@@ -144,15 +144,15 @@ def main(cfg: DictConfig) -> None:
     prediction_paths = []
     for i, hypervars in enumerate(example_hypervars):
         w = hypernetwork(hypervars)
-        targetnetwork = assign_parameters(targetnetwork, w)
+        modified_targetnetwork = assign_parameters(targetnetwork, w)
         mu, l, k = hypervars
-        y_pred = targetnetwork(x_vector)
+        y_pred = modified_targetnetwork(x_vector)
         v_f_to_learn = nnx.vmap(lambda x: f_to_learn(mu, l, k, x))
         y_vector = v_f_to_learn(x_vector)
 
         plt.figure()
         plt.plot(x_vector, y_pred, '--b')
-        plt.plot(x_vector, y_vector)
+        plt.plot(x_vector, y_vector, '-r')
         plt.legend(['Predicted', 'True'], loc='upper left')
         plt.title(f'l = {l:.2f}, k = {k:.2f}, mu = {mu:.2f}')
         plot_path = f'prediction_{i}.png'

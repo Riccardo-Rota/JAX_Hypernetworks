@@ -1,0 +1,4 @@
+- optimizer=adam_cosine_onecycle
+- targetnetwork=siren
+- data.N=10000
+- training.epochs=500

@@ -15,7 +15,7 @@ metrics:
 
 early_stopping:
   _target_: training.EarlyStopping
-  patience: 600
+  patience: 500
   min_delta: 1.0e-8
 
 early_stopping_metric: RRMSE

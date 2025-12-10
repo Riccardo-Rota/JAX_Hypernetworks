@@ -35,9 +35,9 @@ targetnetwork:
 training:
   criterion: 'l2_loss'
   metrics: ['RRMSE', 'MAE', 'RMSE', 'MSE']
-  epochs: 10000
+  epochs: 1500
   early_stopping:
-    patience: 1000
+    patience: 500
     min_delta: 1.0e-9
   scheduler:
     type: 'cosine_decay' # 'cosine_decay' or 'reduce_on_plateau'

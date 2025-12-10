@@ -32,6 +32,7 @@ class MLP(nnx.Module):
         bias_init: Initializer = nnx.initializers.zeros_init(),
         rngs: nnx.Rngs = nnx.Rngs(0),
         apply_init_output_layer: bool = True,
+        replace_weights: bool = True
     ):
         """
         Initializes the MLP with the specified parameters.
@@ -47,6 +48,7 @@ class MLP(nnx.Module):
             zero_init_output_layer (bool, optional): If True, initializes the output layer weights and biases to zero. Default: False.
         """
 
+        self.replace_weights = replace_weights
         if type(kernel_init) == str:
             kernel_init = get_initializer(kernel_init)
         
