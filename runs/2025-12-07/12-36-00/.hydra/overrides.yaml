@@ -1,6 +1,0 @@
-- data.N=1000
-- data.n_realizations=10
-- targetnetwork=siren
-- targetnetwork.num_neurons=[1,16,16,1]
-- optimizer=adam_constant
-- training.learning_rate=1.0e-5

@@ -1,3 +1,0 @@
-- optimizer=adam_cosine_decay
-- training.epochs=10000
-- data.N=10000

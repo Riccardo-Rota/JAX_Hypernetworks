@@ -1,3 +1,0 @@
-- optimizer=adam_plateau
-- training.learning_rate=5e-2
-- training.epochs=1

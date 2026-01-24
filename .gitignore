@@ -3,6 +3,15 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Personalized Hydra output folders
+runs/
+runs_turbulence/
+runs_multiturbulence/
+
+# Standard Hydra defaults (good to include just in case)
+outputs/
+multirun/
+
 # C extensions
 *.so
 
