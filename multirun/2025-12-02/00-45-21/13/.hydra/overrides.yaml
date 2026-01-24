@@ -1,4 +1,0 @@
-- data.N=100
-- data.n_realizations=100
-- targetnetwork=mlp
-- targetnetwork.num_neurons=[1,32,32,1]

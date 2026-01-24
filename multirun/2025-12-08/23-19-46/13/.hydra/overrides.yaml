@@ -1,5 +1,0 @@
-- data.N=1000
-- data.n_realizations=10
-- targetnetwork.num_neurons="[1,32,32,1]"
-- targetnetwork=mlp
-- 'data.f_to_learn=''lambda mu, l, k, x: jnp.exp(-l*x) + mu*x + jnp.sin(k*jnp.pi*x)'''
