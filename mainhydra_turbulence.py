@@ -1,5 +1,8 @@
 import os
 
+# 1. Force XLA to use deterministic algorithms on GPU
+os.environ["XLA_FLAGS"] = "--xla_gpu_deterministic_ops=true"
+
 # CPU fallback
 if 'JAX_PLATFORMS' not in os.environ:
     try:
@@ -7,6 +10,7 @@ if 'JAX_PLATFORMS' not in os.environ:
         if not any(d.platform == 'gpu' for d in devices()): os.environ['JAX_PLATFORMS'] = 'cpu'
     except Exception:
         os.environ['JAX_PLATFORMS'] = 'cpu'
+
 
 import hydra
 from omegaconf import DictConfig, OmegaConf, ListConfig
@@ -49,13 +53,11 @@ def main(cfg: DictConfig) -> None:
     run_path = os.getcwd()
     print(f"Results will be saved in: {run_path}")
 
-    key = random.key(cfg.seed)
-
     dataset_train, dataset_val, dataset_test = hydra.utils.instantiate(cfg.data)
 
-    train_loader = JaxDataLoader(dataset_train, batch_size=cfg.training.batch_size, shuffle=True)
-    val_loader = JaxDataLoader(dataset_val, batch_size=cfg.training.batch_size, shuffle=False)
-    test_loader = JaxDataLoader(dataset_test, batch_size=cfg.training.batch_size, shuffle=False)
+    train_loader = JaxDataLoader(dataset_train, batch_size=cfg.training.batch_size, shuffle=True, seed=cfg.seed)
+    val_loader = JaxDataLoader(dataset_val, batch_size=cfg.training.batch_size, shuffle=False, seed=cfg.seed)
+    test_loader = JaxDataLoader(dataset_test, batch_size=cfg.training.batch_size, shuffle=False, seed=cfg.seed)
 
     N = len(dataset_train)
     cfg.N = N
