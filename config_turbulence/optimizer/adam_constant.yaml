@@ -1,4 +1,0 @@
-_target_: flax.nnx.Optimizer
-tx:
-  _target_: optax.adam
-  learning_rate: ${training.learning_rate}

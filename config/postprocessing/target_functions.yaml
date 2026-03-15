@@ -1,0 +1,24 @@
+loss_plots:
+  loss_linear:
+    _target_: postprocessing.plot_loss_curves
+
+  loss_semilogx:
+    _target_: postprocessing.plot_loss_curves
+    logx: True
+
+  loss_loglog:
+    _target_: postprocessing.plot_loss_curves
+    logx: True
+    logy: True
+
+
+output_plots:
+  predictions:
+    _target_: postprocessing.plot_predictions_legacy
+    N_examples: 4
+    f_to_learn: ${data.f_to_learn}
+    hypernetwork: ${hypernetwork}
+    targetnetwork: ${targetnetwork}
+    mu_domain: ${data.mu_domain}
+    l_domain: ${data.l_domain}
+    k_domain: ${data.k_domain}

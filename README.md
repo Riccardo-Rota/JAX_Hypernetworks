@@ -1,3 +1,12 @@
+# TODO
+- if mainhydra.py works for both, we can remove mainhydra_turbolence.py (and maybe just rename to main.py)
+- Once the dataset is ready, modify the following functions:
+    - postprocessing/plots.py: write plot_predictions1D and plot_prediction2D and delete plot_predictions_legacy
+    - mainhydra.py: remove lines 50-56 if possible
+    - utils/variable_generator.py: remove all file
+    - config folder: modify data folder
+
+
 # PACSproject
 
 To use the *visualization_turbulent_radiative_layer_2D* dataset, you need to install in your environment:

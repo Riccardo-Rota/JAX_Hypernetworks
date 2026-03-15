@@ -1,5 +1,8 @@
 import os
 
+#1. Force XLA to use deterministic algorithms on GPU
+# os.environ["XLA_FLAGS"] = "--xla_gpu_deterministic_ops=true"
+
 # CPU fallback
 if 'JAX_PLATFORMS' not in os.environ:
     try:
@@ -16,38 +19,20 @@ import matplotlib.pyplot as plt
 from data import Dataset, JaxDataLoader
 from training import train_model, assign_parameters, EarlyStopping
 from inference import test_model
-from utils import variables_generator
+from utils import variables_generator, to_basic_types
 from flax import nnx
 from typing import Optional
 import optax
 from losses import *
 from metrics import *
 import datetime, time
-from utils import save_model
+from utils import save_model, register_resolvers
 import json
 
-def compute_train_steps(num_epochs: int, N: int, batch_size: int, n_realizations: Optional[int] = None) -> int:
-    N=(N)
-    batch_size=(batch_size)
-    num_epochs=(num_epochs)
-    n_realizations = (n_realizations) if n_realizations is not None else 1
-    if batch_size == 0:
-        batch_size = 1
-    return int((num_epochs * N * n_realizations) / min(batch_size, N * n_realizations))
-
-def product(lst):
-    result = 1
-    for item in lst:
-        result *= item
-    return result
-
-OmegaConf.register_new_resolver("compute_train_steps", compute_train_steps)
-OmegaConf.register_new_resolver("product", product)
+register_resolvers()
 
 @hydra.main(config_path="config", config_name="config", version_base="1.3")
 def main(cfg: DictConfig) -> None:
-    print("Configuration being used:")
-    print(OmegaConf.to_yaml(cfg))
 
     run_path = os.getcwd()
     print(f"Results will be saved in: {run_path}")
@@ -62,7 +47,14 @@ def main(cfg: DictConfig) -> None:
     train_loader = JaxDataLoader(dataset_train, batch_size=cfg.training.batch_size, shuffle=True)
     val_loader = JaxDataLoader(dataset_val, batch_size=cfg.training.batch_size, shuffle=False)
     test_loader = JaxDataLoader(dataset_test, batch_size=cfg.training.batch_size, shuffle=False)
-
+    
+    #### TODO: remove this if possible
+    N = len(dataset_train)
+    cfg.data.N = N
+    cfg.targetnetwork.num_neurons[0] = dataset_train.dim_vars()
+    cfg.targetnetwork.num_neurons[-1] = dataset_train.dim_labels()
+    #####
+    
     # Instantiate Models using Hydra
     targetnetwork = hydra.utils.instantiate(cfg.targetnetwork)
     num_params = targetnetwork.num_parameters()
@@ -104,65 +96,29 @@ def main(cfg: DictConfig) -> None:
         loader=test_loader,
         metrics=metrics,
     )
-    print(f"Test Metrics: {test_metrics}")
-
-    # Save plots
-    training_loss_history = [m['loss'] for m in history['train_results']]
-    val_loss_history = [m['loss'] for m in history['val_results']]
-
-    plt.figure()
-    plt.loglog(range(len(training_loss_history)), training_loss_history, label='Training Loss')
-    plt.loglog(range(len(val_loss_history)), val_loss_history, label='Validation Loss')
-    plt.xlabel('Epochs')
-    plt.ylabel('MSE Loss')
-    plt.legend()
-    loss_plot_path = 'loss_plot_loglog.png'
-    plt.savefig(loss_plot_path)
-    plt.close()
-    plt.figure()
-    plt.semilogx(range(len(training_loss_history)), training_loss_history, label='Training Loss')
-    plt.semilogx(range(len(val_loss_history)), val_loss_history, label='Validation Loss')
-    plt.xlabel('Epochs')
-    plt.ylabel('MSE Loss')
-    plt.legend()
-    loss_plot_path = 'loss_plot_semilogx.png'
-    plt.savefig(loss_plot_path)
-    plt.close()
-
-    # Example predictions
-    x_vector = jnp.linspace(-1, 1, 101)[:, None]
-    N_examples = cfg['inference']['N_examples']
-    mu_example, l_example, k_example = variables_generator(
-        N=N_examples,
-        n_realizations=1,
-        var_names=['mu', 'l', 'k'],
-        var_domains=[mu_domain, l_domain, k_domain],
-        key=random.key(1)
-    ).values()
-    example_hypervars = jnp.stack([mu_example, l_example, k_example], axis=1)
-
-    prediction_paths = []
-    for i, hypervars in enumerate(example_hypervars):
-        w = hypernetwork(hypervars)
-        modified_targetnetwork = assign_parameters(targetnetwork, w)
-        mu, l, k = hypervars
-        y_pred = modified_targetnetwork(x_vector)
-        v_f_to_learn = nnx.vmap(lambda x: f_to_learn(mu, l, k, x))
-        y_vector = v_f_to_learn(x_vector)
-
-        plt.figure()
-        plt.plot(x_vector, y_pred, '--b')
-        plt.plot(x_vector, y_vector, '-r')
-        plt.legend(['Predicted', 'True'], loc='upper left')
-        plt.title(f'l = {l:.2f}, k = {k:.2f}, mu = {mu:.2f}')
-        plot_path = f'prediction_{i}.png'
-        plt.savefig(plot_path)
-        plt.close()
-        prediction_paths.append(plot_path)
+    print(f"Test Metrics: {test_metrics}")  
 
     # Save model parameters
     hypernetwork_path = 'hypernetwork_params'
     #save_model(hypernetwork, hypernetwork_path) TODO: Implement model saving
+
+    
+    train_history = history['train_results']
+    val_history = history['val_results']
+
+    if "postprocessing" in cfg and ("output_plots" in cfg.postprocessing or "loss_plots" in cfg.postprocessing):
+        plots_path = 'plots'
+        os.makedirs(plots_path, exist_ok=True)
+        print("\n--- Generating Plots ---")
+        
+        if "output_plots" in cfg.postprocessing:
+            for name, config in cfg.postprocessing.output_plots.items():
+                hydra.utils.call(config, hypernetwork=hypernetwork, targetnetwork=targetnetwork, save_path=plots_path)
+                
+        if "loss_plots" in cfg.postprocessing:
+            for name, config in cfg.postprocessing.loss_plots.items():
+                save_path = os.path.join(plots_path, f"{name}.png")
+                hydra.utils.call(config, train_history=train_history, val_history=val_history, save_path=save_path)
 
     # Save JSON with all info
     run_data = {
@@ -194,21 +150,9 @@ def main(cfg: DictConfig) -> None:
         }
     }
 
-    # Convert JAX arrays to list for JSON
-    def convert(obj):
-        if isinstance(obj, jnp.ndarray):
-            return obj.tolist()
-        if isinstance(obj, (list, tuple, ListConfig)):
-            return [convert(o) for o in obj]
-        if isinstance(obj, DictConfig):
-            return {k: convert(v) for k, v in obj.items()}
-        if isinstance(obj, dict):
-            return {k: convert(v) for k, v in obj.items()}
-        return obj
-
     json_path = 'run_data.json'
     with open(json_path, 'w') as f:
-        json.dump(convert(run_data), f, indent=4)
+        json.dump(to_basic_types(run_data), f, indent=4)
 
 if __name__ == "__main__":
     main()

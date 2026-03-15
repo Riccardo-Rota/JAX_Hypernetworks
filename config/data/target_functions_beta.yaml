@@ -1,0 +1,13 @@
+_target_: #TODO
+N: 1000
+n_realizations: 10
+key: 0
+variables_domain:
+- [-1, 1]
+hypervariables_domain:
+- [-2, 2]
+- [0, 1]
+- [-2, 2]
+f_to_learn:
+  _target_: utils.get_function_from_string
+  f_string: "exp(-theta[1]*x) + theta[0]*x + sin(theta[2]*pi*x)"

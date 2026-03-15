@@ -11,9 +11,12 @@ defaults:
   - hypernetwork: mlp
   - optimizer: adam_cosine_onecycle
   - data: target_functions
+  - postprocessing: target_functions
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
   - _self_
+
+seed: 0
 
 data:
   N: 1000
@@ -23,7 +26,7 @@ targetnetwork:
   num_neurons: [1, 8, 8, 1]
   rngs:
     _target_: flax.nnx.Rngs
-    default: 0
+    default: ${seed}
 
 hypernetwork:
   num_neurons: [3, 64, 64, 128, null]
@@ -31,15 +34,10 @@ hypernetwork:
     _target_: models.get_relu
   rngs:
     _target_: flax.nnx.Rngs
-    default: 0
+    default: ${seed}
   apply_init_output_layer: ${targetnetwork.replace_weights}
 
 training:
   epochs: 2000
   learning_rate: 1.0e-3
   batch_size: 1024
-
-inference:
-  N_examples: 4
-
-seed: 0

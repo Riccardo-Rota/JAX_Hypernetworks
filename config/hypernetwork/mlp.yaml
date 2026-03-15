@@ -5,4 +5,4 @@ activation_functions:
   _target_: models.get_tanh
 rngs:
   _target_: flax.nnx.Rngs
-  default: 0
+  default: ${seed}

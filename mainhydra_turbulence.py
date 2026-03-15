@@ -1,7 +1,7 @@
 import os
 
 # 1. Force XLA to use deterministic algorithms on GPU
-os.environ["XLA_FLAGS"] = "--xla_gpu_deterministic_ops=true"
+# os.environ["XLA_FLAGS"] = "--xla_gpu_deterministic_ops=true"
 
 # CPU fallback
 if 'JAX_PLATFORMS' not in os.environ:

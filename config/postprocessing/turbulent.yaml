@@ -1,0 +1,14 @@
+loss_plots:
+  loss_linear:
+    _target_: postprocessing.plot_loss_curves
+
+  loss_semilogx:
+    _target_: postprocessing.plot_loss_curves
+    logx: True
+
+  loss_loglog:
+    _target_: postprocessing.plot_loss_curves
+    logx: True
+    logy: True
+
+output_plots:
