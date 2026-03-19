@@ -151,10 +151,11 @@ def get_pipeline(
         A Python iterator yielding batches as dicts of arrays.
     """
 
+    # Create MapDataset from the source
     dataset = grain.MapDataset.source(source)
 
     if is_training:
-        dataset = dataset.shuffle(seed=seed).repeat()
+        dataset = dataset.shuffle(seed=seed)
 
     dataset = dataset.batch(batch_size=batch_size, drop_remainder=drop_remainder)
 
@@ -173,7 +174,7 @@ def get_pipeline(
     
     if prefetch_size is None:
         if in_memory:
-            num_threads = 0
+            prefetch_size = 0
         else:
             # Data is ON DISK. Prefetch to avoid I/O bottlenecks.
             prefetch_size = 2
@@ -187,4 +188,5 @@ def get_pipeline(
         )
     )
     
+    # Return DatasetIterator
     return iter(iter_dataset)

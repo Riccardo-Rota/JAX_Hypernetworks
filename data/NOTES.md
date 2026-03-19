@@ -25,3 +25,18 @@ JAX cannot use 64-bit values by default: if a NumPy float64 array is passed to J
 Cast to np.ndarray after generation. It costs nothing (the data is already on CPU, and np.asarray(jax_array_on_cpu) is a zero-copy view when dtypes match). The fix is two lines at the end of ToyDataSource.__init__.
 
 This makes the source safe with multiprocessing, consistent with every Grain example in the documentation (which all return NumPy arrays from __getitem__), and consistent with InMemoryHDF5Source (which returns NumPy arrays because h5py does). JAX will then do its single implicit CPU→GPU transfer when the batch first enters a jitted function — which is the right place for it.
+
+# GET_PIPELINE IMPLEMENTATION FOR LOOPING THROUGH EPOCHS
+
+- If we did
+
+```
+if is_training:
+        dataset = dataset.shuffle(seed=seed).repeat(num_epochs=N)
+```
+
+we would have dataset repeated N times (with different shuffle for each epoch), but boundary between epochs will be implicit (for validation step, we would need to do compute steps_per_epoch and then call validation if current_step % steps_per_epoch == 0).
+
+- If we returned IterData from get_pipeline, we would not have possibility to change shuffling seed on each epoch
+
+- Best way to go: re-build entire get_pipeline on each epoch (MapDataset and IterDataset are stateless: computationally not too wasty)
