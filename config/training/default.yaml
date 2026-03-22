@@ -1,5 +1,6 @@
 epochs: 10000
 batch_size: 1024
+in_memory: true
 
 criterion:
   _target_: losses.L2Loss

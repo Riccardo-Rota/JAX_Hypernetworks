@@ -10,17 +10,13 @@ defaults:
   - targetnetwork: mlp
   - hypernetwork: mlp
   - optimizer: adam_cosine_onecycle
-  - data: target_functions
-  - postprocessing: target_functions
+  - data_source: toy
+  - postprocessing: toy
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
   - _self_
 
 seed: 0
-
-data:
-  N: 1000
-  n_realizations: 10
 
 targetnetwork:
   num_neurons: [1, 8, 8, 1]
@@ -38,6 +34,6 @@ hypernetwork:
   apply_init_output_layer: ${targetnetwork.replace_weights}
 
 training:
-  epochs: 2000
+  epochs: 20
   learning_rate: 1.0e-3
   batch_size: 1024

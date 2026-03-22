@@ -1,0 +1,29 @@
+# For initializing train,val,test all here: define the shared properties using an anchor
+base_toy: &base_toy
+  _target_: data.ToyDataSource
+  f:
+    _target_: utils.get_function_from_string
+    f_string: "theta[0]*x[0] + exp(-theta[1]*x[0]) + sin(theta[2]*pi*x[0])"
+  hyper_domains:
+    - [-2, 2]
+    - [0, 1]
+    - [-2, 2]
+  var_domains:
+    - [-1, 1]
+
+# Define explicit splits that inherit the base properties (<<: *base_toy)
+train:
+  <<: *base_toy
+  N: 1000
+  n_realizations: 10
+  seed: ${seed}
+
+val:
+  <<: *base_toy
+  N: 200
+  n_realizations: 10
+
+test:
+  <<: *base_toy
+  N: 200
+  n_realizations: 10

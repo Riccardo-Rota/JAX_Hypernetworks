@@ -2,15 +2,17 @@ import jax.numpy as jnp
 from flax import nnx
 from flax.nnx.training.metrics import Average, MultiMetric, Metric
 from typing import Callable, Optional, List, Tuple, Union, Dict
-from data import JaxDataLoader
 from tqdm import tqdm
+import grain.python as grain
 from training import build_state_from_parameters
+from data.grain_dataset import build_dataset
 
 
 def test_model(
         hypernetwork: nnx.Module,
         targetnetwork: nnx.Module,
-        loader: JaxDataLoader,
+        test_source: grain.RandomAccessDataSource,
+        batch_size: int = 32,
         metrics: Optional[Union[MultiMetric, Dict[str, Metric]]] = None,
         ) -> tuple:
     """
@@ -18,7 +20,7 @@ def test_model(
     Args:
         hypernetwork (nnx.Module): The hypernetwork that generates the parameters for the target network.
         targetnetwork (nnx.Module): The target network that will be modified by the hypernetwork.
-        loader (DataLoader): DataLoader for testing data.
+        test_source (grain.RandomAccessDataSource): DataSource for testing data.
         metrics (Optional[Union[MultiMetric, Dict[str, Metric]]]): Metrics to compute during testing. Default: None.
     Returns:
         MultiMetric: Computed metrics.
@@ -32,7 +34,8 @@ def test_model(
             raise ValueError("metrics must be either a MultiMetric instance, a dictionary of metrics, or None.")
 
     replace = getattr(targetnetwork, 'replace_weights', True)
-    for data in tqdm(loader, desc="Testing"):
+    test_iter = build_dataset(test_source, is_training=False, batch_size=batch_size)
+    for data in tqdm(test_iter, desc="Testing"):
         y = data['labels'] # y
         hypervariables = data['hypervars'] # mu, l, k
         x = data['vars'] # x

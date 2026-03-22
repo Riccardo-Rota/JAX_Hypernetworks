@@ -13,7 +13,7 @@ from datetime import datetime
 import grain.python as grain
 from optax.contrib._reduce_on_plateau import ReduceLROnPlateauState
 
-from data.grain_dataset import get_pipeline
+from data.grain_dataset import build_dataset
 from .hypernet_utils import build_state_from_parameters
 from .early_stopping import EarlyStopping
 
@@ -207,8 +207,8 @@ def train_model(
     pbar = tqdm(range(num_epochs))
     for epoch in pbar:
         metrics.reset()
-        train_iter = get_pipeline(train_source, is_training=True,  batch_size=batch_size, in_memory=in_memory, seed=epoch)
-        val_iter   = get_pipeline(val_source,   is_training=False, batch_size=batch_size, in_memory=in_memory)
+        train_iter = build_dataset(train_source, is_training=True,  batch_size=batch_size, in_memory=in_memory, seed=epoch)
+        val_iter   = build_dataset(val_source,   is_training=False, batch_size=batch_size, in_memory=in_memory)
         train_loss, train_metrics, val_loss, val_metrics = perform_epoch(hypernetwork=hypernetwork,
                                                                        targetnetwork=targetnetwork,
                                                                        train_loader=train_iter, 

@@ -2,7 +2,6 @@ from jax import random
 from typing import Optional, List, Callable, Tuple
 import jax.numpy as jnp
 from omegaconf import DictConfig
-from data import Dataset
 
 #TODO: edit to be consistent with new dataloader
 def variables_generator_beta(N: int, domains: list, key: random.PRNGKey = random.key(0)) -> list:

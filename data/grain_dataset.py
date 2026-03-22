@@ -25,6 +25,16 @@ class InMemoryHDF5Source(grain.RandomAccessDataSource):
             "labels": single_sample[3:]            # density, pressure, velocity_x, velocity_y
         }
     
+    def dim_hypervars(self):
+        return self.__getitem__(0)["hypervars"].shape[0]
+    
+    def dim_vars(self):
+        return self.__getitem__(0)["vars"].shape[0]
+    
+    def dim_labels(self):
+        return self.__getitem__(0)["labels"].shape[0]
+
+    
 class ArrayRecordSource(grain.RandomAccessDataSource):
     """Wraps grain.ArrayRecordDataSource and deserialises each record with pickle."""
  
@@ -36,6 +46,8 @@ class ArrayRecordSource(grain.RandomAccessDataSource):
  
     def __getitem__(self, idx: int):
         return pickle.loads(self._source[idx])
+    
+    # TODO: add dim_hypervars, dim_vars, dim_labels methods
 
 
 class ToyDataSource(grain.RandomAccessDataSource):
@@ -119,9 +131,17 @@ class ToyDataSource(grain.RandomAccessDataSource):
             "labels": self._labels[idx]
         }
     
+    def dim_hypervars(self):
+        return self._hypervars.shape[1]
+    
+    def dim_vars(self):
+        return self._vars.shape[1]
+    
+    def dim_labels(self):
+        return self._labels.shape[1]    
 
 
-def get_pipeline(
+def build_dataset(
     source: grain.RandomAccessDataSource,
     is_training: bool,
     batch_size: int = 32,

@@ -16,10 +16,9 @@ from omegaconf import DictConfig, OmegaConf, ListConfig
 import jax.numpy as jnp
 import jax.random as random
 import matplotlib.pyplot as plt
-from data import Dataset, JaxDataLoader
 from training import train_model, assign_parameters, EarlyStopping
 from inference import test_model
-from utils import variables_generator, to_basic_types
+from utils import to_basic_types
 from flax import nnx
 from typing import Optional
 import optax
@@ -37,22 +36,13 @@ def main(cfg: DictConfig) -> None:
     run_path = os.getcwd()
     print(f"Results will be saved in: {run_path}")
 
-    key = random.key(cfg.seed)
-    data_cfg = cfg.data
-    f_to_learn = eval(cfg.data.f_to_learn, {"__builtins__": None, "jnp": jnp})
-    mu_domain, l_domain, k_domain, x_domain = map(tuple, [data_cfg.mu_domain, data_cfg.l_domain, data_cfg.k_domain, data_cfg.x_domain])
-
-    dataset_train, dataset_val, dataset_test = hydra.utils.instantiate(cfg.data)
-
-    train_loader = JaxDataLoader(dataset_train, batch_size=cfg.training.batch_size, shuffle=True)
-    val_loader = JaxDataLoader(dataset_val, batch_size=cfg.training.batch_size, shuffle=False)
-    test_loader = JaxDataLoader(dataset_test, batch_size=cfg.training.batch_size, shuffle=False)
+    train_source = hydra.utils.instantiate(cfg.data_source.train)
+    val_source = hydra.utils.instantiate(cfg.data_source.val, seed=cfg.seed + 1) # Use different seed for validation set
+    test_source = hydra.utils.instantiate(cfg.data_source.test, seed=cfg.seed + 2) # Use different seed for test set
     
     #### TODO: remove this if possible
-    N = len(dataset_train)
-    cfg.data.N = N
-    cfg.targetnetwork.num_neurons[0] = dataset_train.dim_vars()
-    cfg.targetnetwork.num_neurons[-1] = dataset_train.dim_labels()
+    cfg.targetnetwork.num_neurons[0] = train_source.dim_vars()
+    cfg.targetnetwork.num_neurons[-1] = val_source.dim_labels()
     #####
     
     # Instantiate Models using Hydra
@@ -78,10 +68,12 @@ def main(cfg: DictConfig) -> None:
     history = train_model(
         hypernetwork=hypernetwork,
         targetnetwork=targetnetwork,
-        train_loader=train_loader,
-        val_loader=val_loader,
+        train_source=train_source,
+        val_source=val_source,
         optimizer=optimizer,
         num_epochs=cfg.training.epochs,
+        batch_size=cfg.training.batch_size,
+        in_memory=cfg.training.in_memory, # TODO: fix in memory
         criterion=criterion,
         metrics=metrics,
         early_stopping=early_stopping,
@@ -93,7 +85,8 @@ def main(cfg: DictConfig) -> None:
     test_metrics = test_model(
         hypernetwork=hypernetwork,
         targetnetwork=targetnetwork,
-        loader=test_loader,
+        test_source=test_source,
+        batch_size=cfg.training.batch_size,
         metrics=metrics,
     )
     print(f"Test Metrics: {test_metrics}")  
@@ -131,7 +124,7 @@ def main(cfg: DictConfig) -> None:
         'best_epoch': early_stopping.best_epoch,
         'training_time_seconds': end_time - start_time,
         'time_per_epoch_seconds': (end_time - start_time) / len(history['train_results']),
-        'train_dataset_size': len(dataset_train),
+        'train_dataset_size': len(train_source),
         'N': cfg.data.N,
         'n_realizations': cfg.data.n_realizations,
         'hypernetwork': {

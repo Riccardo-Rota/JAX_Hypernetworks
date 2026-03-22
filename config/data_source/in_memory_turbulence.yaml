@@ -1,0 +1,3 @@
+_target_: data.InMemoryHDF5Source
+
+hdf5_path:

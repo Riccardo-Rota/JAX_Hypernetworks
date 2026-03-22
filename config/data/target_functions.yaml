@@ -1,9 +1,0 @@
-_target_: utils.variable_generator.build_function_dataset_from_config
-f_to_learn: "lambda mu, l, k, x: jnp.exp(-l*x) + mu*x + jnp.sin(k*jnp.pi*x)"
-mu_domain: [-2, 2]
-l_domain: [0, 1]
-k_domain: [-2, 2]
-x_domain: [-1, 1]
-N: 1000
-n_realizations: 10
-key: 0

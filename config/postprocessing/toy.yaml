@@ -16,9 +16,13 @@ output_plots:
   predictions:
     _target_: postprocessing.plot_predictions_legacy
     N_examples: 4
-    f_to_learn: ${data.f_to_learn}
+
+    f_to_learn: ${data_source.train.f.f_string}
+
     hypernetwork: ${hypernetwork}
     targetnetwork: ${targetnetwork}
-    mu_domain: ${data.mu_domain}
-    l_domain: ${data.l_domain}
-    k_domain: ${data.k_domain}
+
+    # TODO: fix and make it general
+    mu_domain: ${data_source.train.hyper_domains[0]}
+    l_domain: ${data_source.train.hyper_domains[1]}
+    k_domain: ${data_source.train.hyper_domains[2]}
