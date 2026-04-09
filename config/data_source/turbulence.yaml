@@ -1,0 +1,11 @@
+train:
+  _target_: data.InMemoryHDF5Source
+  hdf5_path: ${hydra:runtime.cwd}/data/turbulence_dataset_train.hdf5
+
+val:
+  _target_: data.InMemoryHDF5Source
+  hdf5_path: ${hydra:runtime.cwd}/data/turbulence_dataset_val.hdf5
+
+test:
+  _target_: data.InMemoryHDF5Source
+  hdf5_path: ${hydra:runtime.cwd}/data/turbulence_dataset_test.hdf5

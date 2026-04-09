@@ -15,7 +15,7 @@ def prepare_datasets(
     """
     Helper function that reads .hdf5 file, extracts a trajectory, flattens it,
     shuffles globally, splits into train/val/test,
-    and saves to both .hdf5 and .array_record formats for the Grain pipeline.
+    and saves to .hdf5 files.
     """
 
     if not np.isclose(train_ratio + val_ratio + test_ratio, 1.0):
@@ -23,6 +23,11 @@ def prepare_datasets(
 
     # Extract all data for the specified trajectory
     with h5py.File(master_hdf5_path, 'r') as f:
+        # Check if trajectory_index is within bounds
+        n_trajectories = f["t0_fields"]["density"].shape[0]
+        if trajectory_index >= n_trajectories:
+            raise IndexError(f"trajectory_index {trajectory_index} out of range (dataset has {n_trajectories} trajectories)")
+
         time_points = f["dimensions"]['time'][:]
         x_points = f["dimensions"]['x'][:]
         y_points = f["dimensions"]['y'][:]
@@ -70,20 +75,12 @@ def prepare_datasets(
     # Save to physically separate files
     for split_name, data in splits.items():
         hdf5_path = f"{base_name}_{split_name}.hdf5"
-        ar_path = f"{base_name}_{split_name}.array_record"
         
         # Save to HDF5 (For fast In-Memory testing)
         with h5py.File(hdf5_path, 'w') as f:
-            f.create_dataset('data', data=data)
+            f.create_dataset('data', data=data.astype(np.float32))
 
-        # Save to ArrayRecord (when full dataset is too large to fit in memory)
-        # TODO: check if this implementation is right
-        writer = array_record_module.ArrayRecordWriter(ar_path, '')
-        for row in data:
-            record_dict = {
-                "hypervars": row[0:1],       # time
-                "vars": row[1:3],            # x, y
-                "labels": row[3:]            # density, pressure, vel_x, vel_y
-            }
-            writer.write(pickle.dumps(record_dict))
-        writer.close()
+# TODO: for now, we create datasets by running this .py file. In the future, we can decide to move this process somewhere else,
+# e.g. a separate data processing script or a notebook.
+if __name__ == "__main__":
+    prepare_datasets()

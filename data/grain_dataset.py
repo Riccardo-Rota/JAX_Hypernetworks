@@ -34,21 +34,6 @@ class InMemoryHDF5Source(grain.RandomAccessDataSource):
     def dim_labels(self):
         return self.__getitem__(0)["labels"].shape[0]
 
-    
-class ArrayRecordSource(grain.RandomAccessDataSource):
-    """Wraps grain.ArrayRecordDataSource and deserialises each record with pickle."""
- 
-    def __init__(self, array_record_path: str):
-        self._source = grain.ArrayRecordDataSource(array_record_path)
- 
-    def __len__(self):
-        return len(self._source)
- 
-    def __getitem__(self, idx: int):
-        return pickle.loads(self._source[idx])
-    
-    # TODO: add dim_hypervars, dim_vars, dim_labels methods
-
 
 class ToyDataSource(grain.RandomAccessDataSource):
 
@@ -147,7 +132,6 @@ def build_dataset(
     batch_size: int = 32,
     drop_remainder: bool = False,
     seed: int = 42,
-    in_memory: bool = True,
     num_threads: int = None,
     prefetch_size: int = None
 ):
@@ -161,9 +145,6 @@ def build_dataset(
         batch_size:   Number of samples per batch
         drop_remainder: If True, drops the last batch if it's smaller than batch_size
         seed:         Random seed used for shuffling
-        in_memory:    Set to True when all data lives in RAM. This disables threading and prefetching to avoid
-                      GIL contention, as recommended by the Grain docs.
-                      Set to False for disk-backed sources to enable I/O parallelism.
         num_threads:  Override the number of reader threads (None = auto).
         prefetch_size: Override the prefetch buffer size (None = auto).
  
@@ -184,20 +165,10 @@ def build_dataset(
     # "https://google-grain.readthedocs.io/en/stable/grain.dataset.html#grain.ReadOptions"
     # TODO: study about GIL and optimal number of threads
     if num_threads is None:
-        if in_memory:
-            # Data is IN MEMORY. Follow the docs: set to 0.
-            num_threads = 0 
-        else:
-            # Data is ON DISK. Use threads to hide I/O latency.
-            total_cores = os.cpu_count() or 4
-            num_threads = max(1, total_cores // 4)
+        num_threads = 0
     
     if prefetch_size is None:
-        if in_memory:
-            prefetch_size = 0
-        else:
-            # Data is ON DISK. Prefetch to avoid I/O bottlenecks.
-            prefetch_size = 2
+        prefetch_size = 0
 
     # Convert to IterDataset
     iter_dataset = dataset.to_iter_dataset(

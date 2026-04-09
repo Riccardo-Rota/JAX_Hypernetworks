@@ -1,9 +1,10 @@
 _target_: models.Siren
 
-num_neurons: [1, 64, 64, 1]
+num_neurons: [1, 64, 64, 128, null]
 w0_first: 30.0
 w0_last: 30.0
 w0_other: 30.0
 rngs:
   _target_: flax.nnx.Rngs
   default: ${seed}
+apply_init_output_layer: ${targetnetwork.replace_weights}

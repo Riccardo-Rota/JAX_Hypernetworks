@@ -37,9 +37,14 @@ def main(cfg: DictConfig) -> None:
     print(f"Results will be saved in: {run_path}")
 
     train_source = hydra.utils.instantiate(cfg.data_source.train)
-    val_source = hydra.utils.instantiate(cfg.data_source.val, seed=cfg.seed + 1) # Use different seed for validation set
-    test_source = hydra.utils.instantiate(cfg.data_source.test, seed=cfg.seed + 2) # Use different seed for test set
-    
+    val_source = hydra.utils.instantiate(cfg.data_source.val) # Use different seed for validation set
+    test_source = hydra.utils.instantiate(cfg.data_source.test) # Use different seed for test set
+
+    train_dataset_len = len(train_source)
+    OmegaConf.set_struct(cfg, False)
+    cfg.runtime.N = train_dataset_len
+    OmegaConf.set_struct(cfg, True)
+
     #### TODO: remove this if possible
     cfg.targetnetwork.num_neurons[0] = train_source.dim_vars()
     cfg.targetnetwork.num_neurons[-1] = val_source.dim_labels()
@@ -73,7 +78,6 @@ def main(cfg: DictConfig) -> None:
         optimizer=optimizer,
         num_epochs=cfg.training.epochs,
         batch_size=cfg.training.batch_size,
-        in_memory=cfg.training.in_memory, # TODO: fix in memory
         criterion=criterion,
         metrics=metrics,
         early_stopping=early_stopping,

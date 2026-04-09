@@ -1,0 +1,8 @@
+_target_: data.prepare_datasets
+master_hdf5_path: ${hydra:runtime.cwd}/data/turbulent_radiative_layer_tcool_0.10.hdf5
+base_name: 'turbulence_dataset'
+trajectory_index: 0
+train_ratio: 0.7
+validation_ratio: 0.15
+test_ratio: 0.15
+seed: ${seed}

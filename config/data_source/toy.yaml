@@ -22,8 +22,10 @@ val:
   <<: *base_toy
   N: 200
   n_realizations: 10
+  seed: ${sum:[${seed},1]}
 
 test:
   <<: *base_toy
   N: 200
   n_realizations: 10
+  seed: ${sum:[${seed},2]}

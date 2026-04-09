@@ -7,4 +7,4 @@ tx:
     - _target_: optax.contrib.reduce_on_plateau
       factor: 0.5
       patience: 10
-      accumulation_size: ${product:[${data_source.train.N}, 0.1]}
+      accumulation_size: ${product:[${runtime.N}, 0.1]}

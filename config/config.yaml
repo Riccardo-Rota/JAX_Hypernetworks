@@ -1,6 +1,6 @@
 hydra:
   job:
-    name: default # change name if needed
+    name: default
     chdir: true
   run:
     dir: runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
@@ -10,30 +10,14 @@ defaults:
   - targetnetwork: mlp
   - hypernetwork: mlp
   - optimizer: adam_cosine_onecycle
-  - data_source: toy
-  - postprocessing: toy
+  - problem: turbulence              # Controller for consistency across configs. Can be toy or turbulence.
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
   - _self_
 
 seed: 0
 
-targetnetwork:
-  num_neurons: [1, 8, 8, 1]
-  rngs:
-    _target_: flax.nnx.Rngs
-    default: ${seed}
-
-hypernetwork:
-  num_neurons: [3, 64, 64, 128, null]
-  activation_functions:
-    _target_: models.get_relu
-  rngs:
-    _target_: flax.nnx.Rngs
-    default: ${seed}
-  apply_init_output_layer: ${targetnetwork.replace_weights}
-
-training:
-  epochs: 20
-  learning_rate: 1.0e-3
-  batch_size: 1024
+# NOTE: N for toy problem can be found at congif-time, while for turbulence problem it is determined at runtime.
+# This is because for the turbulence problem, the number of variables (N) depends on the specific dataset and how it is processed, which may not be known until the data is loaded and analyzed during runtime.
+runtime:
+  N: ???

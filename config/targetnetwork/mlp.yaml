@@ -1,6 +1,6 @@
 _target_: models.MLP
 
-num_neurons: [1, 64, 64, 1]
+num_neurons: [2, 8, 8, 1]
 activation_functions:
   _target_: models.get_tanh
 rngs:

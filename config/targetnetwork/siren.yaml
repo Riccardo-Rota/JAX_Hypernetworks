@@ -1,6 +1,6 @@
 _target_: models.Siren
 
-num_neurons: [1, 64, 64, 1]
+num_neurons: [2, 8, 8, 1]
 w0_first: 30.0
 w0_last: 30.0
 w0_other: 30.0

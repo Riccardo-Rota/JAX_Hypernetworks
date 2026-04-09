@@ -152,7 +152,6 @@ def train_model(
         optimizer: nnx.Optimizer,
         num_epochs: int,
         batch_size: int = 32,
-        in_memory: bool = True,
         criterion: nnx.Module = L2Loss(),
         metrics: Optional[Union[MultiMetric, Dict[str, Metric]]] = None,
         early_stopping: Optional[EarlyStopping] = None,
@@ -170,8 +169,6 @@ def train_model(
         optimizer (nnx.Optimizer): The optimizer to use for updating the hypernetwork parameters.
         num_epochs (int): The number of epochs to train the model.
         batch_size   (int): Batch size for both train and val pipelines.
-        # TODO: check if necessary to do here in_memory
-        in_memory    (bool): Whether the source is fully in RAM (controls threading/prefetch).
         criterion (Callable, optional): The loss function to use. Default is optax.l2_loss.
         metrics (Dict[str, Callable], optional): A dictionary of metric functions to compute during the training. Default is None.
         early_stopping (EarlyStopping, optional): An EarlyStopping object to monitor validation performance and stop training early if needed. Default is None.
@@ -207,8 +204,8 @@ def train_model(
     pbar = tqdm(range(num_epochs))
     for epoch in pbar:
         metrics.reset()
-        train_iter = build_dataset(train_source, is_training=True,  batch_size=batch_size, in_memory=in_memory, seed=epoch)
-        val_iter   = build_dataset(val_source,   is_training=False, batch_size=batch_size, in_memory=in_memory)
+        train_iter = build_dataset(train_source, is_training=True,  batch_size=batch_size, seed=epoch)
+        val_iter   = build_dataset(val_source,   is_training=False, batch_size=batch_size)
         train_loss, train_metrics, val_loss, val_metrics = perform_epoch(hypernetwork=hypernetwork,
                                                                        targetnetwork=targetnetwork,
                                                                        train_loader=train_iter, 
