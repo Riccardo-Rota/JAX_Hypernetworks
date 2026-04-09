@@ -1,209 +1,218 @@
 import flax.nnx as nnx
+import jax
 import jax.numpy as jnp
-from typing import Dict, List, Optional, Callable, Sequence, Union, Any
+from typing import Dict, List, Optional, Callable, Union, Any
 import networkx
 import warnings
 import math 
-from flax.traverse_util import flatten_dict, unflatten_dict 
+from flax.traverse_util import flatten_dict, unflatten_dict
 
 
-# THIS SHOULD WORK, BUT I WOULD LIKE THE MANAGER TO AUTOMATICALLY INSTANTIATE THE PROJECTION HEADS BASED ON THE 
-# NUMBER OF REQUIRED PARAMETERS. IS IT DOABLE?
+def state_to_dict(state: Any) -> Any:
+    """Recursively converts an nnx.State mapping into a standard Python dictionary."""
+    if not isinstance(state, nnx.State):
+        return state
+    return {k: state_to_dict(v) for k, v in state.items()}
 
-def set_nested_dict(d: dict, path: str, value: Any): 
-    """
-    Sets a value in a nested dictionary given a dot-separated path.
-    Args:
-    d (dict): The dictionary to modify.
-    path (str): The dot-separated path to the key to set (e.g., 'layer1.weight').
-    value (Any): The value to set at the specified path.
-    """
-    keys = path.split('.') 
-    for key in keys[:-1]: 
-        if key not in d:
-            raise KeyError(f"Failed to set weight: '{key}' not found in path '{path}'. Check your config.")
-        d = d[key] 
-    if keys[-1] not in d:
-        raise KeyError(f"Failed to set weight: '{keys[-1]}' not found in path '{path}'. Check your config.")
-    d[keys[-1]] = value
 
 class OutputsNumberWarning(UserWarning):
     pass
 
+
 class NeuralNetwork(nnx.Module):
     """
     Base class for neural network modules that includes metadata about input and output mappings for use in the HypernetworkManager."""
-    def __init__(self, network: nnx.Module, input_mapping: Optional[Dict[str, str]], output_mapping: Optional[List[str]]):
-        """
-        Args:
-            network (nnx.Module): The neural network module to be wrapped.
-            input_mapping (Optional[Dict[str, str]]): A dictionary mapping argument names of the network's forward method to the keys in the input dictionary that will be passed to the HypernetworkManager. For example, if the network's forward method has an argument 'x', and we want to pass the value from the input dictionary with key 'variables', then we would have {'x': 'variables'}.
-            output_mapping (Optional[List[str]]): A list of strings representing the keys under which the outputs of this network will be stored in the HypernetworkManager's output dictionary. The order of this list should match the order of outputs returned by the network's forward method.
-        """
+    def __init__(self, network: Optional[nnx.Module], input_mapping: Optional[Dict[str, str]], output_mapping: Optional[Union[List[str], str]]):
         self.network = network
-        self.input_mapping = input_mapping
-        self.output_mapping = output_mapping
+        self.input_mapping = input_mapping #(e.g., {'inputs': 'variables', 'theta': 'hypervariables'})
+        if isinstance(output_mapping, str):
+            output_mapping = [output_mapping]
+        self.output_mapping = output_mapping # (e.g., ['features1', 'features2'])
 
-    def __call__(self, x):
-        return self.network(x)
+    def __call__(self, *args, **kwargs):
+        if self.network is None:
+            raise RuntimeError(f"Network is None in {self.__class__.__name__}. Please build it first.")
+        return self.network(*args, **kwargs)
+
 
 class TargetNetwork(NeuralNetwork):
-    "Target network class that can optionally take weights as input and assign them before the forward pass."
-    def __init__(self, network: nnx.Module, input_mapping: Optional[Dict[str, str]], output_mapping: List[str], weights_mapping: Optional[Dict[str, str]] = None, replace_weights: bool = True):
-        """
-        Args:
-            network (nnx.Module): The neural network module to be wrapped.
-            input_mapping (Optional[Dict[str, str]]): A dictionary mapping argument names of the network's forward method to the keys in the input dictionary that will be passed to the HypernetworkManager. For example, if the network's forward method has an argument 'x', and we want to pass the value from the input dictionary with key 'variables', then we would have {'x': 'variables'}.
-            output_mapping (Optional[List[str]]): A list of strings representing the keys under which the outputs of this network will be stored in the HypernetworkManager's output dictionary. The order of this list should match the order of outputs returned by the network's forward method.
-            weights_mapping (Optional[Union[Dict[str, str], str]]): A dictionary mapping weight paths to their values. Each weight path is a dot-separated string that specifies the location of the weight in the target network's state dictionary (e.g., 'layer1.weight'). Alternatively, if set to 'all', it indicates that the hypernetwork will generate all weights for the target network.
-            replace_weights (bool): Whether to replace existing weights with the provided ones. If False, the provided weights will be summed with existing ones.
-        """
+    def __init__(self, network: nnx.Module, input_mapping: Optional[Dict[str, str]], output_mapping: Optional[Union[List[str], str]], weights_mapping: Optional[Dict[str, str]] = None, replace_weights: bool = True):
         super().__init__(network, input_mapping, output_mapping)
-        self.weights_mapping = weights_mapping
+        self.weights_mapping = weights_mapping # (e.g., {'layer1.weight': 'features1', 'layer2.bias': 'features2'}, or {'all': 'features1'} for a single signal containing all weights)
         self.replace_weights = replace_weights
 
-    def __call__(self, x: jnp.ndarray, weights: Optional[Dict[str, Any]] = None):
-        if weights is not None and self.replace_weights:
-            graphdef, state = nnx.split(self.network)
-            if 'all' in weights:
-                if len(weights) > 1:
-                    warnings.warn("weights_mapping contains 'all' but also specific paths. Replacing all weights and ignoring the specific paths.")
-                # We extract the actual PyTree using the 'all' key
-                new_state = nnx.State(weights['all'])
+        # Pre-compute shapes and total sizes needed for each signal safely using state_to_dict
+        target_state = nnx.state(network)
+        state_dict = state_to_dict(target_state) 
+        
+        self.flat_state_shapes = {
+            k: (v.value.shape if hasattr(v, 'value') else v.shape)
+            for k, v in flatten_dict(state_dict, sep='.').items()
+        }
+
+        self.signal_to_weight_keys = {}  # Maps signal_name -> list of weight keys it must fill
+        self.signal_to_weight_size = {}  # Maps signal_name -> total flat elements that the signal must provide
+
+        if self.weights_mapping:
+            if 'all' in self.weights_mapping:
+                signal = self.weights_mapping['all']
+                self.signal_to_weight_keys[signal] = list(self.flat_state_shapes.keys())
+                self.signal_to_weight_size[signal] = sum(math.prod(s) for s in self.flat_state_shapes.values())
             else:
-                state_dict = state.to_dict()
-                for target_path, generated_weight in weights.items():
-                    set_nested_dict(state_dict, target_path, generated_weight)
-                new_state = nnx.State(state_dict)
-            modified_network = nnx.merge(graphdef, new_state) 
-            return modified_network(x)
-        if weights is not None and not self.replace_weights:
-            raise NotImplementedError("Currently only weight replacement is implemented. Merging with existing weights is not yet supported.")
-        return self.network(x)
-            
+                for weight_key, signal in self.weights_mapping.items():
+                    if weight_key not in self.flat_state_shapes:
+                        raise ValueError(f"Weight key '{weight_key}' not found in TargetNetwork.")
+                    self.signal_to_weight_keys.setdefault(signal, []).append(weight_key)
+                    shape = self.flat_state_shapes[weight_key]
+                    self.signal_to_weight_size[signal] = self.signal_to_weight_size.get(signal, 0) + math.prod(shape)
 
-class Hypernetwork(NeuralNetwork):
-    "Hypernetwork class that generates a output representing a latent space, to be used by a ProjectionHead to produce weights for the TargetNetwork."
-    pass
-
-class ProjectionHead(NeuralNetwork):
-    "Projection head class that takes the output of a Hypernetwork and produces weights for the TargetNetwork."
-    def __init__(self, 
-                 in_features: int, 
-                 target_network: nnx.Module, 
-                 weight_paths: Union[str, List[str]], 
-                 input_mapping: Optional[Dict[str, str]] = None, 
-                 output_mapping: Optional[List[str]] = None,
-                 kernel_init: Callable = nnx.initializers.lecun_normal(),
-                 bias_init: Callable = nnx.initializers.zeros_init()):
-        """
-        Args:
-            in_features (int): The number of input features to the projection head (i.e., the size of the hypernetwork's output).
-            target_network (nnx.Module): The target network for which this projection head will generate weights.
-            weight_paths (Union[str, List[str]]): A list of dot-separated strings representing the paths to the weights in the target network's state dictionary that will be generated by the projection head. Alternatively, if set to 'all', the projection head will generate all weights for the target network.
-            input_mapping (Optional[Dict[str, str]]): A dictionary mapping argument names of the projection head's forward method to the keys in the input dictionary that will be passed to the HypernetworkManager.
-            output_mapping (Optional[List[str]]): A list of strings representing the keys under which the outputs of this projection head will be stored in the HypernetworkManager's output dictionary. The order of this list should match the order of outputs returned by the projection head's forward method.
-            kernel_init (Callable): The initialization function for the weights of the linear layer in the projection head.
-            bias_init (Callable): The initialization function for the biases of the linear layer in the projection head.
-        """
+    def _inject_weights(self, state_dict: dict, weights: dict[str, jnp.ndarray]) -> dict:
+        flat_state = flatten_dict(state_dict, sep='.')
         
-        # Extract and flatten the target network's state dictionary
-        target_state = nnx.state(target_network)
-        flat_state = flatten_dict(target_state.to_dict(), sep='.')
-        
-        # Determine which paths we are predicting
-        if weight_paths == 'all':
-            self.weight_paths = list(flat_state.keys())
-        else:
-            self.weight_paths = weight_paths
-
-        # Calculate shapes and total required output features
-        self.weight_shapes = {}
-        out_features = 0
-        
-        for path in self.weight_paths:
-            if path not in flat_state:
-                raise ValueError(f"Target path '{path}' not found in the target network.")
+        for signal, flat_array in weights.items():
+            if signal not in self.signal_to_weight_keys:
+                continue
             
-            param = flat_state[path]
-            shape = param.value.shape if hasattr(param, 'value') else param.shape
-            
-            self.weight_shapes[path] = shape
-            out_features += math.prod(shape)
-            
-        # Create the linear layer with customizable initialization
-        network = nnx.Linear(
-            in_features, 
-            out_features, 
-            kernel_init=kernel_init, 
-            bias_init=bias_init
-        )
-        super().__init__(network, input_mapping, output_mapping)
+            weight_keys = self.signal_to_weight_keys[signal]
+            is_batched = flat_array.ndim > 1
+            batch_size = flat_array.shape[0] if is_batched else None
 
-    def __call__(self, x: jnp.ndarray): # TODO: CHECK BATCHING LOGIC
-        flat_predictions = self.network(x)
-        
-        is_batched = flat_predictions.ndim > 1
-        batch_size = flat_predictions.shape[0] if is_batched else None
-        
-        generated_flat_dict = {}
-        current_idx = 0
-        
-        for path in self.weight_paths:
-            shape = self.weight_shapes[path]
-            num_elements = math.prod(shape)
+            current_idx = 0
+            for weight_key in weight_keys:
+                shape = self.flat_state_shapes[weight_key]
+                num_elements = math.prod(shape)
+
+                if is_batched:
+                    flat_slice = flat_array[:, current_idx : current_idx + num_elements]
+                    target_shape = (batch_size,) + shape
+                else:
+                    flat_slice = flat_array[current_idx : current_idx + num_elements]
+                    target_shape = shape
+
+                reshaped_weight = jnp.reshape(flat_slice, target_shape)
+                
+                old_var = flat_state[weight_key]
+                
+                # Check if it's a VariableState container (has both 'type' and 'value')
+                if hasattr(old_var, 'value') and hasattr(old_var, 'type'):
+                    new_val = reshaped_weight if self.replace_weights else (old_var.value + reshaped_weight)
+                    # Reconstruct correctly: VariableState(type, value)
+                    flat_state[weight_key] = type(old_var)(old_var.type, new_val)
+                    
+                # Fallback for other potential variable wrappers
+                elif hasattr(old_var, 'value'):
+                    new_val = reshaped_weight if self.replace_weights else (old_var.value + reshaped_weight)
+                    flat_state[weight_key] = type(old_var)(value=new_val)
+                    
+                # Standard raw array
+                else:
+                    if self.replace_weights:
+                        flat_state[weight_key] = reshaped_weight
+                    else:
+                        flat_state[weight_key] += reshaped_weight
+                        
+                current_idx += num_elements
+                
+        return unflatten_dict(flat_state, sep='.')
+
+    def __call__(self, *args, weights: Optional[Dict[str, Any]] = None, **kwargs):
+        if weights is not None:
+            graphdef, state = nnx.split(self.network)
+            state_dict = state_to_dict(state) 
+            state_dict = self._inject_weights(state_dict, weights)
+            new_state = nnx.State(state_dict)
+            
+            is_batched = any(w.ndim > 1 for w in weights.values())
             
             if is_batched:
-                flat_slice = flat_predictions[:, current_idx : current_idx + num_elements]
-                target_shape = (batch_size,) + shape
-            else:
-                flat_slice = flat_predictions[current_idx : current_idx + num_elements]
-                target_shape = shape
+                # Map across axis 0 for both the new state and the kwargs PyTrees.
+                def apply_fn(state_to_apply, fn_kwargs):
+                    modified_network = nnx.merge(graphdef, state_to_apply)
+                    return modified_network(**fn_kwargs)
                 
-            generated_flat_dict[path] = jnp.reshape(flat_slice, target_shape)
-            current_idx += num_elements
-            
-        nested_weights = unflatten_dict(generated_flat_dict, sep='.')
-        return nested_weights
+                vmap_forward = jax.vmap(apply_fn, in_axes=(0, 0))
+                return vmap_forward(new_state, kwargs)
+            else:
+                modified_network = nnx.merge(graphdef, new_state) 
+                return modified_network(*args, **kwargs)
+        else:
+            return self.network(*args, **kwargs)
+
+
+class Hypernetwork(NeuralNetwork):
+    "Hypernetwork class that generates a output representing a latent space, to be used by a ProjectionHead."
+    pass
+
+
+class ProjectionHead(NeuralNetwork):
+    def __init__(self, 
+                 in_features: int, 
+                 input_mapping: Optional[Dict[str, str]], 
+                 output_mapping: str,
+                 rngs: Optional[nnx.Rngs] = None,
+                 kernel_init: Callable = nnx.initializers.lecun_normal(),
+                 bias_init: Callable = nnx.initializers.zeros_init()):
+        
+        super().__init__(network=None, input_mapping=input_mapping, output_mapping=output_mapping)
+        self.in_features = in_features
+        # Instantiate inside the init to avoid eager JAX evaluation at import time
+        self.rngs = rngs if rngs is not None else nnx.Rngs(0) 
+        self.kernel_init = kernel_init
+        self.bias_init = bias_init
+
+    def build(self, out_features: int):
+        self.network = nnx.Linear(
+            in_features=self.in_features, 
+            out_features=out_features, 
+            kernel_init=self.kernel_init, 
+            bias_init=self.bias_init,
+            rngs=self.rngs
+        )
+
 
 class HypernetworkManager(nnx.Module):
-    """
-    Class that manages the execution of a graph of NeuralNetwork blocks (TargetNetworks, Hypernetworks, ProjectionHeads) based on their input and output dependencies.
-    """
     def __init__(self, blocks: List[NeuralNetwork]):
-        """
-        Initializes the HypernetworkManager with a list of NeuralNetwork blocks (which can be TargetNetworks, Hypernetworks, or ProjectionHeads).
-        The manager constructs a directed acyclic graph based on the input and output, to determine the execution order of the blocks.
-        Args:
-            blocks (List[NeuralNetwork]): A list of NeuralNetwork instances.
-        """
+        
+        signal_to_weight_size = {}
+        for block in blocks:
+            if isinstance(block, TargetNetwork) and block.weights_mapping:
+                for signal, size in block.signal_to_weight_size.items():
+                    if signal in signal_to_weight_size and signal_to_weight_size[signal] != size:
+                        raise ValueError(f"Signal '{signal}' is used by two different weight sets with conflicting sizes.")
+                    signal_to_weight_size[signal] = size
 
-        graph = networkx.DiGraph() # Create a directed graph to represent dependencies between blocks
-        outputs_producers = {} # Map output keys to the index of the block that produces them
+        for block in blocks:
+            if isinstance(block, ProjectionHead):
+                if not block.output_mapping or len(block.output_mapping) != 1:
+                    raise ValueError("ProjectionHead must have exactly one output mapped.")
+                
+                out_signal = block.output_mapping[0]
+                if out_signal in signal_to_weight_size:
+                    block.build(out_features=signal_to_weight_size[out_signal])
+                else:
+                    warnings.warn(f"Head output '{out_signal}' is unused. Building with size 1.")
+                    block.build(out_features=1)
 
-        # Populate graph and outputs_producers
-        for i, block in enumerate(blocks):
+        graph = networkx.DiGraph() 
+        outputs_producers = {} 
+
+        for i, block in enumerate(blocks): 
             graph.add_node(i) 
             if block.output_mapping:
                 for output_node in block.output_mapping:
                     outputs_producers[output_node] = i
 
-        # Create edges between blocks based on dependencies
-        for i, block in enumerate(blocks):
+        for i, block in enumerate(blocks): 
             if block.input_mapping:
                 for input_node in block.input_mapping.values():
-                    # If this input is produced by another block, draw an edge
                     if input_node in outputs_producers:
-                        producer_index = outputs_producers[input_node]
-                        graph.add_edge(producer_index, i)
+                        graph.add_edge(outputs_producers[input_node], i)
             if isinstance(block, TargetNetwork) and block.weights_mapping:
-                for weight_node in block.weights_mapping.values():
-                    # If this weight is produced by another block, draw an edge
-                    if weight_node in outputs_producers:
-                        graph.add_edge(outputs_producers[weight_node], i)
+                for weight_signal in block.weights_mapping.values():
+                    if weight_signal in outputs_producers:
+                        graph.add_edge(outputs_producers[weight_signal], i)
 
-        # Sort the graph and build the execution order
-        try:
+        try: 
             sorted_indices = list(networkx.topological_sort(graph))
         except networkx.NetworkXUnfeasible:
             raise ValueError("A circular dependency was detected in the graph.")
@@ -211,27 +220,208 @@ class HypernetworkManager(nnx.Module):
         self.execution_order = [blocks[i] for i in sorted_indices]
 
     def __call__(self, inputs: dict[str, jnp.ndarray]) -> Dict[str, Any]:
-        """
-        Executes the entire processing chain of the graph.
-        Args:
-            inputs (dict[str, jnp.ndarray]): A dictionary containing the initial inputs, usually with keys 'variables' and 'hypervariables' and their corresponding values as jnp arrays.
-        Returns:
-            Dict[str, Any]: The final dictionary containing all signals,
-                including initial ones and those computed by every node.
-        """
-        objects = inputs.copy()  # Start with the initial inputs as the objects we have available
+        objects = inputs.copy() 
+        
         for block in self.execution_order:
-            input_kwargs = {input_name: objects[input_key] for input_name, input_key in (block.input_mapping or {}).items()}
+            input_kwargs = {name: objects[key] for name, key in (block.input_mapping or {}).items()}
+            
             if isinstance(block, TargetNetwork) and block.weights_mapping:
-                input_kwargs['weights'] = {weight_path: objects[weight_key] for weight_path, weight_key in block.weights_mapping.items()}
+                unique_signals = set(block.weights_mapping.values())
+                if 'weights' in input_kwargs:
+                    raise ValueError("The reserved keyword 'weights' cannot be used as an input mapping key for a TargetNetwork block.")
+                input_kwargs['weights'] = {signal: objects[signal] for signal in unique_signals}
 
             y = block(**input_kwargs)
-            output_names = block.output_mapping or [] # MODIFIED
+            output_names = block.output_mapping or [] 
             if not isinstance(y, tuple):
                 y = (y,)
+            
             if len(output_names) != len(y):
-                warnings.warn(OutputsNumberWarning(f"Node '{block.network.__class__.__name__}' output mapping has {len(output_names)} keys, but the module returned {len(y)} values. Ignoring extra outputs."))
+                warnings.warn(f"Block '{type(block).__name__}' produced {len(y)} outputs but has {len(output_names)} output names defined.")
+            
             for i in range(min(len(output_names), len(y))):
                 objects[output_names[i]] = y[i]
 
         return objects
+    
+
+# def run_dummy_test():
+#     rngs = nnx.Rngs(42)
+
+#     base_target = nnx.Linear(in_features=3, out_features=2, rngs=rngs)
+#     base_hyper = nnx.Linear(in_features=4, out_features=5, rngs=rngs)
+
+#     # Note the kwarg key is 'inputs' for all mapping configurations
+#     # because that is the exact parameter name flax.nnx.Linear expects.
+#     hyper_block = Hypernetwork(
+#         network=base_hyper,
+#         input_mapping={'inputs': 'latent_z'},  
+#         output_mapping='hyper_features'        
+#     )
+
+#     proj_block = ProjectionHead(
+#         in_features=5,                         
+#         input_mapping={'inputs': 'hyper_features'}, 
+#         output_mapping='predicted_weights',    
+#         rngs=rngs  # Will default internally if omitted, but passed here safely                            
+#     )
+
+#     target_block = TargetNetwork(
+#         network=base_target,
+#         input_mapping={'inputs': 'target_input'},   
+#         weights_mapping={'all': 'predicted_weights'}, 
+#         output_mapping='final_output'
+#     )
+
+#     manager = HypernetworkManager([target_block, proj_block, hyper_block])
+
+#     print("\n" + "="*50)
+#     print("TEST 1: UNBATCHED FORWARD PASS (Single item)")
+#     print("="*50)
+    
+#     inputs_unbatched = {
+#         'latent_z': jnp.ones((4,)),        
+#         'target_input': jnp.ones((3,))     
+#     }
+    
+#     outputs_unbatched = manager(inputs_unbatched)
+    
+#     print(f"Provided latent: {inputs_unbatched['latent_z'].shape}")
+#     print(f"Provided data input: {inputs_unbatched['target_input'].shape}")
+#     print(f"Predicted weights shape (ProjectionHead): {outputs_unbatched['predicted_weights'].shape}")
+#     print(f"Final output (TargetNetwork): {outputs_unbatched['final_output'].shape} -> Expected: (2,)")
+
+#     print("\n" + "="*50)
+#     print("TEST 2: BATCHED FORWARD PASS (vmap active)")
+#     print("="*50)
+    
+#     batch_size = 10
+#     inputs_batched = {
+#         'latent_z': jnp.ones((batch_size, 4)),       
+#         'target_input': jnp.ones((batch_size, 3))    
+#     }
+    
+#     outputs_batched = manager(inputs_batched)
+    
+#     print(f"Provided latents: {inputs_batched['latent_z'].shape}")
+#     print(f"Provided data input: {inputs_batched['target_input'].shape}")
+#     print(f"Predicted weights shape (ProjectionHead): {outputs_batched['predicted_weights'].shape}")
+#     print(f"Final output (TargetNetwork): {outputs_batched['final_output'].shape} -> Expected: (10, 2)")
+#     print("==================================================\n")
+
+
+# if __name__ == "__main__":
+#     import os
+#     if 'JAX_PLATFORMS' not in os.environ:
+#         try:
+#             from jax import devices
+#             if not any(d.platform == 'gpu' for d in devices()): os.environ['JAX_PLATFORMS'] = 'cpu'
+#         except Exception:
+#             os.environ['JAX_PLATFORMS'] = 'cpu'
+#     run_dummy_test()
+
+import jax
+import jax.numpy as jnp
+import flax.nnx as nnx
+import optax
+# Assume HypernetworkManager, TargetNetwork, ProjectionHead, Hypernetwork are imported or defined above
+
+def train_dummy_model():
+    rngs = nnx.Rngs(42)
+
+    # 1. Initialize the Modules
+    base_target = nnx.Linear(in_features=3, out_features=2, rngs=rngs)
+    base_hyper = nnx.Linear(in_features=4, out_features=5, rngs=rngs)
+
+    hyper_block = Hypernetwork(
+        network=base_hyper, 
+        input_mapping={'inputs': 'latent_z'}, 
+        output_mapping='hyper_features'
+    )
+    proj_block = ProjectionHead(
+        in_features=5, 
+        input_mapping={'inputs': 'hyper_features'}, 
+        output_mapping='predicted_weights', 
+        rngs=rngs
+    )
+    target_block = TargetNetwork(
+        network=base_target, 
+        input_mapping={'inputs': 'target_input'}, 
+        weights_mapping={'all': 'predicted_weights'}, 
+        output_mapping='final_output'
+    )
+
+    manager = HypernetworkManager([target_block, proj_block, hyper_block])
+
+    # 2. Setup the Optimizer
+    # nnx.Optimizer automatically traverses the manager PyTree and registers all nnx.Param instances
+    learning_rate = 0.01
+    optimizer = nnx.Optimizer(manager, optax.adam(learning_rate))
+
+    # 3. Generate Dummy Dataset
+    num_samples = 100
+    batch_size = 10
+    
+    key = jax.random.key(0)
+    k1, k2, k3 = jax.random.split(key, 3)
+    X_data = jax.random.normal(k1, (num_samples, 3))  # Target network inputs
+    Z_data = jax.random.normal(k2, (num_samples, 4))  # Hypernetwork latent inputs
+    Y_data = jax.random.normal(k3, (num_samples, 2))  # Expected output
+
+    # 4. Define Loss and Train Step
+    def loss_fn(model, batch):
+        outputs = model(batch)
+        preds = outputs['final_output']
+        # Simple Mean Squared Error
+        loss = jnp.mean((preds - batch['y_true']) ** 2)
+        return loss
+
+    @nnx.jit
+    def train_step(model, optim, batch):
+        # nnx.value_and_grad extracts the state, computes the forward pass, 
+        # and traces the gradients back to the respective nnx.Params.
+        loss, grads = nnx.value_and_grad(loss_fn)(model, batch)
+        optim.update(grads)
+        return loss
+
+    # 5. Training Loop
+    epochs = 50
+    print("\n" + "="*50)
+    print("STARTING DUMMY TRAINING (Overfitting random data)")
+    print("="*50)
+
+    for epoch in range(epochs):
+        epoch_loss = 0.0
+        num_batches = num_samples // batch_size
+        
+        for i in range(num_batches):
+            start = i * batch_size
+            end = start + batch_size
+            
+            # Construct the batched dictionary expected by the Manager
+            batch = {
+                'target_input': X_data[start:end],
+                'latent_z': Z_data[start:end],
+                'y_true': Y_data[start:end]
+            }
+            
+            loss = train_step(manager, optimizer, batch)
+            epoch_loss += loss.item()
+            
+        # Print progress every 10 epochs
+        if (epoch + 1) % 10 == 0 or epoch == 0:
+            avg_loss = epoch_loss / num_batches
+            print(f"Epoch {epoch + 1:02d}/{epochs} - Loss: {avg_loss:.4f}")
+
+if __name__ == "__main__":
+    import os
+    # CPU fallback for local testing
+    if 'JAX_PLATFORMS' not in os.environ:
+        try:
+            from jax import devices
+            if not any(d.platform == 'gpu' for d in devices()): 
+                os.environ['JAX_PLATFORMS'] = 'cpu'
+        except Exception:
+            os.environ['JAX_PLATFORMS'] = 'cpu'
+            
+    train_dummy_model()
