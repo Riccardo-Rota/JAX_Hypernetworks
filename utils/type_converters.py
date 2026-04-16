@@ -1,6 +1,7 @@
 from typing import Optional, Union, List, Any, Tuple
 from omegaconf import DictConfig, ListConfig
 import jax.numpy as jnp
+from flax import nnx
 import jax
 import ast
 
@@ -42,6 +43,11 @@ def to_tuple(x: Optional[Union[Tuple[Any, ...], List[Any], Any]]) -> Tuple[Any, 
         return tuple(x)
     return x if isinstance(x, tuple) else (x,)
 
+def state_to_dict(state: Any) -> Any:
+    """Recursively converts an nnx.State mapping into a standard Python dictionary."""
+    if not isinstance(state, nnx.State):
+        return state
+    return {k: state_to_dict(v) for k, v in state.items()}
 
 # Parser to convert a math string into a JAX-compatible function with maximum security, using Python's native AST to prevent any code execution.
 allowed_funcs = {
