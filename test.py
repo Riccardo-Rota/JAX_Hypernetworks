@@ -40,7 +40,6 @@ def train_dummy_model():
         rngs=rngs
     )
     
-    # FIX: Use 'weights' instead of 'weights_mapping' (matches TargetNetwork __init__)
     target_block = TargetNetwork(
         network=base_target, 
         input='target_input', 
