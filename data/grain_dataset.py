@@ -19,11 +19,11 @@ class InMemoryHDF5Source(grain.RandomAccessDataSource):
 
     def __getitem__(self, idx: int):
         single_sample = self._data[idx]
+
         return {
             "hypervars": single_sample[0:1],       # time
             "vars": single_sample[1:3],            # x,y
-            "labels": single_sample[3:]            # density, pressure, velocity_x, velocity_y
-        }
+        }, single_sample[3:] # density, pressure, velocity_x, velocity_y
     
     def dim_hypervars(self):
         return self.__getitem__(0)["hypervars"].shape[0]
@@ -32,7 +32,7 @@ class InMemoryHDF5Source(grain.RandomAccessDataSource):
         return self.__getitem__(0)["vars"].shape[0]
     
     def dim_labels(self):
-        return self.__getitem__(0)["labels"].shape[0]
+        return self.__getitem__(0)[1].shape[0]
 
 
 class ToyDataSource(grain.RandomAccessDataSource):
@@ -106,15 +106,19 @@ class ToyDataSource(grain.RandomAccessDataSource):
         
         self._num_records = N
 
+        # Attributes for plotting at the end of training
+        self.hyper_domains = hyper_domains
+        self.var_domains = var_domains
+        self.f = f
+
     def __len__(self):
         return self._num_records
 
-    def __getitem__(self, idx: int):
+    def __getitem__(self, idx: int):    
         return {
-            "hypervars": self._hypervars[idx],
-            "vars": self._vars[idx],
-            "labels": self._labels[idx]
-        }
+                "hypervars": self._hypervars[idx],
+                "vars": self._vars[idx],
+            }, self._labels[idx]
     
     def dim_hypervars(self):
         return self._hypervars.shape[1]
