@@ -1,0 +1,68 @@
+# config.yaml
+
+# ==========================================
+# 1. HYPERNETWORK
+# Demonstrates: Single Positional Argument (String)
+# ==========================================
+hyper_block:
+  _target_: models.Hypernetwork
+  network:
+    _target_: flax.nnx.Linear
+    in_features: 4
+    out_features: 5
+    rngs: 
+      _target_: flax.nnx.Rngs
+      params: 42
+  # Maps objects['latent_z'] to *args
+  input_mapping: latent_z
+  output_mapping: hyper_features
+
+# ==========================================
+# 2. PROJECTION HEAD
+# Demonstrates: Pure Keyword Arguments (Dictionary)
+# ==========================================
+proj_block:
+  _target_: models.ProjectionHead
+  in_features: 5
+  # Maps objects['hyper_features'] to **kwargs as {'inputs': ...}
+  input_mapping:
+    inputs: hyper_features
+  output_mapping: predicted_weights
+
+# ==========================================
+# 3. TARGET NETWORK
+# Demonstrates: Mixed Positional & Keyword Arguments (List)
+# ==========================================
+target_block:
+  _target_: models.TargetNetwork
+  network:
+    _target_: flax.nnx.Linear
+    in_features: 3
+    out_features: 2
+    rngs: 
+      _target_: flax.nnx.Rngs
+      params: 42
+
+  # The unified mixed list! 
+  # Strings become *args, Dictionaries become **kwargs.
+  input_mapping:
+    - target_input                 # Positional arg 1
+    - text_embedding               # Positional arg 2
+    - is_training: train_flag      # Keyword arg 1
+    - mask: attention_mask         # Keyword arg 2
+    
+  weights_mapping:
+    all: predicted_weights
+  output_mapping: final_output
+  replace_weights: false
+
+# ==========================================
+# 4. HYPERNETWORK MANAGER
+# Instantiates the topological graph
+# ==========================================
+manager:
+  _target_: models.HypernetworkManager
+  blocks:
+    - ${target_block}
+    - ${proj_block}
+    - ${hyper_block}

@@ -1,6 +1,7 @@
 from .MLP import MLP
 from .siren import Siren
 from .activation_functions import get_gelu, get_relu, get_sigmoid, get_tanh
+from .hypernetwork_manager import HypernetworkManager, NeuralNetwork, TargetNetwork, Hypernetwork, ProjectionHead
 
 __all__ = [
     "MLP",
@@ -9,4 +10,9 @@ __all__ = [
     "get_relu",
     "get_sigmoid",
     "get_tanh",
+    "HypernetworkManager",
+    "NeuralNetwork",
+    "TargetNetwork",
+    "Hypernetwork",
+    "ProjectionHead",
 ]
