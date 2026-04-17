@@ -44,20 +44,9 @@ def main(cfg: DictConfig) -> None:
     OmegaConf.set_struct(cfg, False)
     cfg.runtime.N = train_dataset_len
     OmegaConf.set_struct(cfg, True)
-
-    #### TODO: remove this if possible
-    cfg.targetnetwork.num_neurons[0] = train_source.dim_vars()
-    cfg.targetnetwork.num_neurons[-1] = val_source.dim_labels()
-    #####
     
     # Instantiate Models using Hydra
-    targetnetwork = hydra.utils.instantiate(cfg.targetnetwork)
-    num_params = targetnetwork.num_parameters()
-    print(f"Target network '{type(targetnetwork).__name__}' instantiated with {num_params} parameters.")
-
-    OmegaConf.update(cfg.hypernetwork, "num_neurons.-1", num_params, merge=False) # Set output layer size to match target network parameters
-    hypernetwork = hydra.utils.instantiate(cfg.hypernetwork)
-    print(f"Hypernetwork '{type(hypernetwork).__name__}' instantiated.")
+    model = hydra.utils.instantiate(cfg.model.manager)
     
     # Instantiate Training Components
     criterion = hydra.utils.instantiate(cfg.training.criterion)
@@ -65,14 +54,13 @@ def main(cfg: DictConfig) -> None:
     early_stopping = hydra.utils.instantiate(cfg.training.early_stopping)
     log_path = os.path.join(run_path, 'training_log.txt')
 
-    optimizer = hydra.utils.instantiate(cfg.optimizer, model=hypernetwork)
+    optimizer = hydra.utils.instantiate(cfg.optimizer, model=model)
 
     print("Starting training...")
     # Run Training
     start_time = time.time()
     history = train_model(
-        hypernetwork=hypernetwork,
-        targetnetwork=targetnetwork,
+        model=model,
         train_source=train_source,
         val_source=val_source,
         optimizer=optimizer,
@@ -87,8 +75,7 @@ def main(cfg: DictConfig) -> None:
     print("Training completed.")
     # Run Testing
     test_metrics = test_model(
-        hypernetwork=hypernetwork,
-        targetnetwork=targetnetwork,
+        model=model,
         test_source=test_source,
         batch_size=cfg.training.batch_size,
         metrics=metrics,
@@ -96,8 +83,8 @@ def main(cfg: DictConfig) -> None:
     print(f"Test Metrics: {test_metrics}")  
 
     # Save model parameters
-    hypernetwork_path = 'hypernetwork_params'
-    #save_model(hypernetwork, hypernetwork_path) TODO: Implement model saving
+    saved_model_path = 'model_weights'
+    #save_model(model, saved_model_path) TODO: Implement model saving
 
     
     train_history = history['train_results']
@@ -110,7 +97,7 @@ def main(cfg: DictConfig) -> None:
         
         if "output_plots" in cfg.postprocessing:
             for name, config in cfg.postprocessing.output_plots.items():
-                hydra.utils.call(config, hypernetwork=hypernetwork, targetnetwork=targetnetwork, save_path=plots_path)
+                hydra.utils.call(config, model=model, save_path=plots_path)
                 
         if "loss_plots" in cfg.postprocessing:
             for name, config in cfg.postprocessing.loss_plots.items():
@@ -119,7 +106,6 @@ def main(cfg: DictConfig) -> None:
 
     # Save JSON with all info
     run_data = {
-        'f_to_learn': cfg.data.f_to_learn if 'f_to_learn' in cfg.data else 'other dataset',
         'test_metrics': test_metrics,
         'val_metrics': history['val_results'][early_stopping.best_epoch],
         'train_metrics': history['train_results'][early_stopping.best_epoch],
@@ -128,19 +114,6 @@ def main(cfg: DictConfig) -> None:
         'best_epoch': early_stopping.best_epoch,
         'training_time_seconds': end_time - start_time,
         'time_per_epoch_seconds': (end_time - start_time) / len(history['train_results']),
-        'train_dataset_size': len(train_source),
-        'N': cfg.data.N,
-        'n_realizations': cfg.data.n_realizations,
-        'hypernetwork': {
-            'type': type(hypernetwork).__name__,
-            'num_parameters': hypernetwork.num_parameters(),
-            'num_neurons': cfg.hypernetwork.num_neurons,
-        },
-        'targetnetwork': {
-            'type': type(targetnetwork).__name__,
-            'num_parameters': targetnetwork.num_parameters(),
-            'num_neurons': cfg.targetnetwork.num_neurons,
-        },
         'training_history': {
             'train_results': history['train_results'],
             'val_results': history['val_results']

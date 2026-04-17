@@ -64,7 +64,7 @@ class TargetNetwork(NeuralNetwork):
         self.freeze_weights() 
         self.target_graphdef, initial_state = nnx.split(self.network)
         self.base_state_dict = state_to_dict(initial_state)
-        self._map_signals()  # Maps signals to weight keys and sizes and computes the shapes of the weights to be injected
+        self._map_signals() 
 
     def freeze_weights(self):
         graphdef, state = nnx.split(self.network)
@@ -87,51 +87,76 @@ class TargetNetwork(NeuralNetwork):
         self.base_state_dict = state_to_dict(new_initial_state)
 
     def _map_signals(self):
-        self.flat_state_shapes = {
-            k: (v.value.shape if hasattr(v, 'value') else v.shape)
-            for k, v in flatten_dict(self.base_state_dict, sep='.').items()
-        }
-        self.signal_to_weight_keys = {}
+        leaves_with_paths, self.treedef = jax.tree_util.tree_flatten_with_path(
+            self.base_state_dict, 
+            is_leaf=lambda x: isinstance(x, nnx.Variable)
+        )
+        
+        self.leaf_shapes = []
+        self.signal_to_leaf_indices = {}
         self.signal_to_weight_size = {}
-        if self.weights_mapping:
-            if 'all' in self.weights_mapping:
-                signal = self.weights_mapping['all']
-                self.signal_to_weight_keys[signal] = list(self.flat_state_shapes.keys())
-                self.signal_to_weight_size[signal] = sum(math.prod(s) for s in self.flat_state_shapes.values())
-            else:
-                for weight_key, signal in self.weights_mapping.items():
-                    if weight_key not in self.flat_state_shapes:
-                        raise ValueError(f"Weight key '{weight_key}' not found in TargetNetwork.")
-                    self.signal_to_weight_keys.setdefault(signal, []).append(weight_key)
-                    shape = self.flat_state_shapes[weight_key]
+        
+        for i, (path, leaf) in enumerate(leaves_with_paths):
+            shape = leaf.value.shape if hasattr(leaf, 'value') else leaf.shape
+            self.leaf_shapes.append(shape)
+            
+            if self.weights_mapping:
+                if 'all' in self.weights_mapping:
+                    signal = self.weights_mapping['all']
+                    self.signal_to_leaf_indices.setdefault(signal, []).append(i)
                     self.signal_to_weight_size[signal] = self.signal_to_weight_size.get(signal, 0) + math.prod(shape)
+                else:
+                    path_keys = [str(getattr(p, 'key', getattr(p, 'idx', p))) for p in path]
+                    
+                    for weight_key, signal in self.weights_mapping.items():
+                        if weight_key in path_keys:
+                            self.signal_to_leaf_indices.setdefault(signal, []).append(i)
+                            self.signal_to_weight_size[signal] = self.signal_to_weight_size.get(signal, 0) + math.prod(shape)
 
     def _inject_weights(self, state_dict: dict, weights: dict[str, jnp.ndarray]) -> dict:
-        flat_state = flatten_dict(state_dict, sep='.')
+        leaves = jax.tree_util.tree_leaves(
+            state_dict, 
+            is_leaf=lambda x: isinstance(x, nnx.Variable)
+        )
+        
+        new_leaves = list(leaves)
         
         for signal, flat_array in weights.items():
-            if signal not in self.signal_to_weight_keys:
+            if signal not in self.signal_to_leaf_indices:
                 continue
-            weight_keys = self.signal_to_weight_keys[signal]
+                
+            indices = self.signal_to_leaf_indices[signal]
             is_batched = flat_array.ndim > 1
             batch_size = flat_array.shape[0] if is_batched else None
+            
             current_idx = 0
-            for weight_key in weight_keys:
-                shape = self.flat_state_shapes[weight_key]
+            for i in indices:
+                shape = self.leaf_shapes[i]
                 num_elements = math.prod(shape)
+                
                 if is_batched:
                     flat_slice = flat_array[:, current_idx : current_idx + num_elements]
                     target_shape = (batch_size,) + shape
                 else:
                     flat_slice = flat_array[current_idx : current_idx + num_elements]
                     target_shape = shape
+                    
                 reshaped_weight = jnp.reshape(flat_slice, target_shape)
-                old_var = flat_state[weight_key]
-                new_val = reshaped_weight if self.replace_weights else (old_var.value + reshaped_weight)
-                flat_state[weight_key] = type(old_var)(old_var.type, new_val)
+                old_var = leaves[i]
+                
+                if hasattr(old_var, 'value'): 
+                    new_val = reshaped_weight if self.replace_weights else (old_var.value + reshaped_weight)
+                    if hasattr(old_var, 'type'):
+                        new_leaves[i] = type(old_var)(old_var.type, new_val)
+                    else:
+                        new_leaves[i] = type(old_var)(new_val)
+                else: 
+                    new_val = reshaped_weight if self.replace_weights else (old_var + reshaped_weight)
+                    new_leaves[i] = new_val
+                    
                 current_idx += num_elements
                 
-        return unflatten_dict(flat_state, sep='.')
+        return jax.tree_util.tree_unflatten(self.treedef, new_leaves)
     
     def __call__(self, *args, weights: Optional[Dict[str, Any]] = None, **kwargs):
         if weights is not None:
@@ -265,6 +290,7 @@ class HypernetworkManager(nnx.Module):
     
     def extract_target_network(self, inputs: dict[str, jnp.ndarray]) -> Dict[str, nnx.Module]:
         """
+        Executes the manager to extract the TargetNetwork with injected weights as a standalone nnx.Module.
         """
         # determine target networks and the signals they require, to only execute the necessary blocks
         target_networks = [b for b in self.blocks if isinstance(b, TargetNetwork)]

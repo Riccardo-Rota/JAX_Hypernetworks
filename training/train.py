@@ -176,7 +176,7 @@ def train_model(
         metrics.reset()
         train_iter = build_dataset(train_source, is_training=True,  batch_size=batch_size, seed=epoch)
         val_iter   = build_dataset(val_source,   is_training=False, batch_size=batch_size)
-        train_loss, train_metrics, val_loss, val_metrics = perform_epoch(model=hypernetwork,
+        train_loss, train_metrics, val_loss, val_metrics = perform_epoch(model=model,
                                                                        train_loader=train_iter, 
                                                                        val_loader=val_iter, 
                                                                        optimizer=optimizer, 

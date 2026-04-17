@@ -7,10 +7,9 @@ hydra:
 
 defaults:
   - training: default
-  - targetnetwork: mlp
-  - hypernetwork: mlp
   - optimizer: adam_cosine_onecycle
-  - problem: turbulence              # Controller for consistency across configs. Can be toy or turbulence.
+  - problem: toy            # Controller for consistency across configs. Can be toy or turbulence.
+  - model: toy
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
   - _self_

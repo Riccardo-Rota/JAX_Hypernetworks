@@ -12,17 +12,17 @@ loss_plots:
     logy: True
 
 
-output_plots:
-  predictions:
-    _target_: postprocessing.plot_predictions_legacy
-    N_examples: 4
+# output_plots:
+#   predictions:
+#     _target_: postprocessing.plot_predictions_legacy
+#     N_examples: 4
 
-    f_to_learn: ${data_source.train.f.f_string}
+#     f_to_learn: ${data_source.train.f.f_string}
 
-    hypernetwork: ${hypernetwork}
-    targetnetwork: ${targetnetwork}
+#     hypernetwork: ${hypernetwork}
+#     targetnetwork: ${targetnetwork}
 
-    # TODO: fix and make it general
-    mu_domain: ${data_source.train.hyper_domains[0]}
-    l_domain: ${data_source.train.hyper_domains[1]}
-    k_domain: ${data_source.train.hyper_domains[2]}
+#     # TODO: fix and make it general
+#     mu_domain: ${data_source.train.hyper_domains[0]}
+#     l_domain: ${data_source.train.hyper_domains[1]}
+#     k_domain: ${data_source.train.hyper_domains[2]}
