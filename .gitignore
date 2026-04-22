@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 
 # Personalized Hydra output folders
+frontend/
 runs/
 runs_turbulence/
 runs_multiturbulence/
