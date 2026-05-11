@@ -1,8 +1,12 @@
-_target_: data.prepare_datasets
-master_hdf5_path: ${hydra:runtime.cwd}/data/turbulent_radiative_layer_tcool_0.10.hdf5
-base_name: 'turbulence_dataset'
-trajectory_index: 0
-train_ratio: 0.7
-validation_ratio: 0.15
-test_ratio: 0.15
-seed: ${seed}
+data:
+  # ---- Dataset selection (used by both download and preprocessing) ----------
+  tcool: "0.10"            # one of: 0.03 0.06 0.10 0.18 0.32 0.56 1.00 1.78 3.16
+  trajectory: 0
+ 
+  # ---- Train/val/test split (used by preprocessing only) --------------------
+  base_name: "turbulence_dataset"  # output prefix → <base_name>_{train,val,test}.hdf5
+  chunk_size: 10
+  train_ratio: 0.8
+  val_ratio: 0.1
+  test_ratio: 0.1
+  seed: ${seed}
