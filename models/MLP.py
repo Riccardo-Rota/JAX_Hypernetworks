@@ -1,7 +1,11 @@
 from typing import Optional, Union, Callable, Sequence, List
 import jax
+import jax.numpy as jnp
 from flax import nnx
 from flax.typing import Initializer
+from hypernetwork_manager import ProjectionHead
+from typing import Dict, Any, Literal
+from .activation_functions import uniform_init
 
 # Define possible initializers
 initializers = {
@@ -96,3 +100,41 @@ class MLP(nnx.Module):
             if lay.use_bias:
                 num_par += lay.bias.value.size
         return num_par
+
+
+MlpInitMode = Literal['weight', 'bias']
+
+class MLPHead(ProjectionHead):
+    """
+    Module to map a latent space from a hypernetwork to standard MLP weights.
+    The layer is mathematically calibrated to Glorot/Xavier initialization bounds.
+    """
+    def __init__(self, 
+                 in_features: int, 
+                 input: Optional[List[Union[str, Dict[str, str]]]],
+                 output: str,
+                 rngs: Optional[nnx.Rngs] = None,
+                 mode: MlpInitMode = 'weight',
+                 mlp_in_features: Optional[int] = None,
+                 mlp_out_features: Optional[int] = None):
+        
+        # 1. Symmetry-breaking near-zero kernel
+        kernel_init = nnx.initializers.normal(stddev=1e-5)
+        
+        # 2. Mode-specific MLP bias initialization
+        if mode == 'weight':
+            if mlp_in_features is None or mlp_out_features is None:
+                raise ValueError("Both mlp_in_features and mlp_out_features are required for 'weight' mode.")
+            
+            # Glorot (Xavier) Uniform Limit Calculation
+            limit = jnp.sqrt(6.0 / (mlp_in_features + mlp_out_features))
+            bias_init = uniform_init(limit)
+            
+        elif mode == 'bias':
+            # Target MLP biases initialize to zero
+            bias_init = nnx.initializers.zeros_init()
+            
+        else:
+            raise ValueError(f"Invalid mode '{mode}'.")
+            
+        super().__init__(in_features, input, output, rngs, kernel_init, bias_init)

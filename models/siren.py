@@ -1,10 +1,15 @@
 import jax
 import jax.numpy as jnp
 from flax import nnx
-from typing import List, Union, Any
+from typing import List, Literal, Union, Any
 from flax.typing import Initializer
+from hypernetwork_manager import ProjectionHead
+from typing import Callable, Sequence, Optional, Dict
+from .activation_functions import uniform_init
 
 Dtype = Union[jax.typing.DTypeLike, Any]
+
+# TODO: CLEAN AND COMMENT
 
 initializers = {
     "lecun_normal": nnx.initializers.lecun_normal(),
@@ -12,7 +17,8 @@ initializers = {
     "glorot_normal": nnx.initializers.glorot_normal(),
     "glorot_uniform": nnx.initializers.glorot_uniform(),
     "he_normal": nnx.initializers.he_normal(),
-    "he_uniform": nnx.initializers.he_uniform()
+    "he_uniform": nnx.initializers.he_uniform(),
+    "close_to_zero": nnx.initializers.normal(stddev=1e-5)
 }
 
 def get_initializer(name):
@@ -154,26 +160,35 @@ class Siren(nnx.Module):
 # - weights initialized from uniform [-1,1] amd rescaled with a specific formula (line 78 for 1st layer, line 80 for others)
 # bias initialized with zeros (nothing special, but I say it for the sake of completeness)
 
-class SirenHead(nnx.Module):
+SirenInitMode = Literal['first_kernel', 'kernel', 'bias']
+
+class SirenHead(ProjectionHead):
     """
     Module to take a latent space outputed from a hypernetwork and map it to the weights of a Siren network.
-    Outputs are rescaled accordingly to Siren initialization.
+    The layer is initialized accordingly to Siren initialization.
     """
-    def __init__(self,
-        siren: Siren,
-        latent_dim: int,
-        *,
-        rngs: nnx.Rngs,
-        ):
-        
-        self.siren = siren
-        self.latent_dim = latent_dim
-        self.total_params = siren.num_parameters()
-
-        # Define a simple FCNN to map latent space to siren weights
-        self.mapper = FCNN(
-            num_neurons = [latent_dim, 128, 256, self.total_params],
-            kernel_init = "he_uniform",
-            bias_init = nnx.initializers.zeros_init(),
-            rngs = rngs
-        )
+    def __init__(self, 
+                 in_features: int, 
+                 input: Optional[List[Union[str, Dict[str, str]]]],
+                 output: str,
+                 rngs: Optional[nnx.Rngs] = None,
+                 mode: SirenInitMode = 'kernel',
+                 siren_in_features: Optional[int] = None,
+                 w0: float = 30.0
+                 ):
+        kernel_init = nnx.initializers.normal(stddev=1e-5)
+        if mode == 'first_kernel':
+            if siren_in_features is None:
+                raise ValueError("siren_in_features must be provided when mode is 'first_kernel'")
+            limit = 1.0 / siren_in_features
+            bias_init = uniform_init(limit)
+        elif mode == 'kernel':
+            if siren_in_features is None or w0 is None:
+                raise ValueError("siren_in_features and w0 must be provided when mode is 'kernel'")
+            limit = jnp.sqrt(6 / siren_in_features) / w0
+            bias_init = uniform_init(limit)
+        elif mode == 'bias':
+            bias_init = nnx.initializers.zeros_init()
+        else:
+            raise ValueError(f"Invalid mode '{mode}'. Expected one of: 'first_kernel', 'kernel', 'bias'.")
+        super().__init__(in_features, input, output, rngs, kernel_init, bias_init)

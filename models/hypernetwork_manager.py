@@ -9,7 +9,7 @@ from flax.traverse_util import flatten_dict, unflatten_dict
 from utils import state_to_dict
 from collections.abc import Mapping, Sequence
 
-# TODO: ADD COMMENTS, INTEGRATE WITH THE REST OF THE CODE (very easy)
+# TODO: ADD COMMENTS
 
 class TargetNetworkWeight(nnx.Variable):
     pass
