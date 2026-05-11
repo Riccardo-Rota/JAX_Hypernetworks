@@ -10,6 +10,7 @@ defaults:
   - optimizer: adam_cosine_onecycle
   - problem: toy            # Controller for consistency across configs. Can be toy or turbulence.
   - model: toy
+  - preprocessing: preprocessing
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
   - _self_
