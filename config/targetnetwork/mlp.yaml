@@ -6,4 +6,3 @@ activation_functions:
 rngs:
   _target_: flax.nnx.Rngs
   default: ${seed}
-replace_weights: true

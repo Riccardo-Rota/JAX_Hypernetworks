@@ -1,0 +1,54 @@
+# model/toy_siren_naive.yaml
+
+# HYPERNETWORK
+hyper_block:
+  _target_: models.Hypernetwork
+
+  network:
+    _target_: models.MLP
+    num_neurons: [3, 64, 64, 128]
+    activation_functions:
+      _target_: models.get_tanh
+    rngs:
+      _target_: flax.nnx.Rngs
+      default: ${seed}
+
+  input: hypervars
+  output: latent_features
+
+# PROJECTION HEAD
+proj_block:
+  _target_: models.SirenHead
+  in_features: 128
+  input: latent_features
+  output: weights
+  siren_in_features: 1
+  rngs:
+    _target_: flax.nnx.Rngs
+    params: 42
+
+# TARGET NETWORK
+target_block:
+  _target_: models.TargetNetwork
+  network:
+    _target_: models.Siren
+    w0_first: 30.0
+    w0_last: 30.0
+    w0_other: 30.0
+    num_neurons: [1, 8, 8, 1]
+    rngs:
+      _target_: flax.nnx.Rngs
+      default: ${seed}
+  input: vars
+  weights_mapping:
+    all: weights
+  output: final_output
+
+# HYPERNETWORK MANAGER
+manager:
+  _target_: models.HypernetworkManager
+  blocks:
+    - ${model.target_block}
+    - ${model.proj_block}
+    - ${model.hyper_block}
+  output: final_output

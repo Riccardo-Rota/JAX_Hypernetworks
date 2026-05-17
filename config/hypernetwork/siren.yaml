@@ -7,4 +7,3 @@ w0_other: 30.0
 rngs:
   _target_: flax.nnx.Rngs
   default: ${seed}
-apply_init_output_layer: ${targetnetwork.replace_weights}

@@ -42,10 +42,9 @@ target_block:
     rngs:
       _target_: flax.nnx.Rngs
       default: ${seed}
-    replace_weights: true
 
   input: vars
-  weights:
+  weights_mapping:
     all: weights
   output: final_output
 

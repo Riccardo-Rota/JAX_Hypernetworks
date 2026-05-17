@@ -119,11 +119,9 @@ class Siren(nnx.Module):
         w0_first: float = 30,
         w0_last: float = 30,
         w0_other: float = 30,
-        rngs: nnx.Rngs,
-        replace_weights: bool = False
+        rngs: nnx.Rngs
         ):
         
-        self.replace_weights = replace_weights
         self.layers = list()
         for i_layer in range(len(num_neurons)-1):
             if i_layer == 0:

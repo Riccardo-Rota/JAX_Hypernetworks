@@ -18,7 +18,11 @@ def sum(lst):
         result += item
     return result
 
+def as_tuple(*args):
+    return tuple(args)
+
 def register_resolvers():
     OmegaConf.register_new_resolver("compute_train_steps", compute_train_steps)
     OmegaConf.register_new_resolver("product", product)
     OmegaConf.register_new_resolver("sum", sum)
+    OmegaConf.register_new_resolver("as_tuple", as_tuple)

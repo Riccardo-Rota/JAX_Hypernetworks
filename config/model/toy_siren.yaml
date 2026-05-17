@@ -1,0 +1,105 @@
+# model/toy.yaml
+
+# HYPERNETWORK
+hyper_block:
+  _target_: models.Hypernetwork
+
+  network:
+    _target_: models.MLP
+    num_neurons: [3, 64, 64, 128]
+    activation_functions:
+      _target_: models.get_tanh
+    rngs:
+      _target_: flax.nnx.Rngs
+      default: ${seed}
+
+  input: hypervars
+  output: latent_features
+
+# PROJECTION HEAD FOR FIRST KERNEL
+proj_block_first_kernel:
+  _target_: models.SirenHead
+  in_features: 128
+  input: latent_features
+  output: weights_first_kernel
+  mode: kernel
+  siren_in_features: 1
+  rngs:
+    _target_: flax.nnx.Rngs
+    params: 42
+
+# PROJECTION HEAD FOR OTHER KERNELS
+proj_block_other_kernels:
+  _target_: models.SirenHead
+  in_features: 128
+  input: latent_features
+  output: weights_other_kernels
+  mode: kernel
+  siren_in_features: 1
+  rngs:
+    _target_: flax.nnx.Rngs
+    params: 42
+
+# PROJECTION HEAD FOR BIASES
+proj_block_bias:
+  _target_: models.SirenHead
+  in_features: 128
+  input: latent_features
+  output: biases
+  mode: bias
+  siren_in_features: 1
+  rngs:
+    _target_: flax.nnx.Rngs
+    params: 42
+
+# TARGET NETWORK
+target_first_layer:
+  _target_: models.TargetNetwork
+  
+  network:
+    _target_: models.Siren
+    w0_first: 30.0
+    w0_last: 30.0
+    w0_other: 30.0
+    num_neurons: [1, 8]
+    rngs:
+      _target_: flax.nnx.Rngs
+      default: ${seed}
+
+  input: vars
+  weights_mapping:
+    bias: biases
+    kernel: weights_first_kernel
+  output: first_layer_output
+
+target_other_layers:
+  _target_: models.TargetNetwork
+  
+  network:
+    _target_: models.Siren
+    w0_first: 30.0
+    w0_last: 30.0
+    w0_other: 30.0
+    num_neurons: [8, 8, 1]
+    rngs:
+      _target_: flax.nnx.Rngs
+      default: ${seed}
+
+  input: first_layer_output
+  weights_mapping:
+    bias: biases
+    kernel: weights_other_kernels
+  output: final_output
+
+# HYPERNETWORK MANAGER
+manager:
+  _target_: models.HypernetworkManager
+  blocks:
+    - ${model.target_first_layer}
+    - ${model.target_other_layers}
+    - ${model.proj_block_first_kernel}
+    - ${model.proj_block_other_kernels}
+    - ${model.proj_block_bias}
+    - ${model.hyper_block}
+
+  output: final_output
