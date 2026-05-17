@@ -3,7 +3,7 @@ import jax.numpy as jnp
 from flax import nnx
 from typing import List, Literal, Union, Any
 from flax.typing import Initializer
-from hypernetwork_manager import ProjectionHead
+from .hypernetwork_manager import ProjectionHead
 from typing import Callable, Sequence, Optional, Dict
 from .activation_functions import uniform_init
 

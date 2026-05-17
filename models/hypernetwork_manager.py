@@ -196,9 +196,9 @@ class TargetNetwork(NeuralNetwork):
             if not isinstance(weight_keys, tuple): # ensure weight_keys is a tuple for consistent processing
                 weight_keys = (weight_keys,)
             # find all paths that match the weight keys, and check for conflicts in the mapping
-            pattern = re.compile(rf'(?:^|/){re.escape(weight_key)}(?:/|$)') # Example: 'layer1' matches 'layer1/...' or '.../layer1/...' or '.../layer1' but not 'layer10'
             matching_paths = []
             for weight_key in weight_keys:
+                pattern = re.compile(rf'(?:^|/){re.escape(weight_key)}(?:/|$)') # Example: 'layer1' matches 'layer1/...' or '.../layer1/...' or '.../layer1' but not 'layer10'
                 for path_string in self.leaf_registry.keys():
                     if pattern.search(path_string):
                         if path_string in mapped_paths:
