@@ -102,7 +102,7 @@ class MLP(nnx.Module):
         return num_par
 
 
-MlpInitMode = Literal['weight', 'bias']
+MLPInitMode = Literal['weight', 'bias']
 
 class MLPHead(ProjectionHead):
     """
@@ -114,7 +114,7 @@ class MLPHead(ProjectionHead):
                  input: Optional[List[Union[str, Dict[str, str]]]],
                  output: str,
                  rngs: Optional[nnx.Rngs] = None,
-                 mode: MlpInitMode = 'weight',
+                 mode: MLPInitMode = 'weight',
                  mlp_in_features: Optional[int] = None,
                  mlp_out_features: Optional[int] = None):
         
