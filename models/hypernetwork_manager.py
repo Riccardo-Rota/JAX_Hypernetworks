@@ -286,13 +286,13 @@ class TargetNetwork(NeuralNetwork):
             state_dict = self._inject_weights(weights)
             new_state = nnx.State(state_dict)
             is_batched = any(w.ndim > 1 for w in weights.values())
-            modified_network = nnx.merge(self.graphdef, new_state)
 
             if is_batched:
-                state_axes = nnx.StateAxes({
-                        InjectedBatchedWeights: 0, 
-                        nnx.Variable: None  
-                    })
+                state_axes = jax.tree.map(
+                    lambda v: 0 if isinstance(v, InjectedBatchedWeights) else None,
+                    new_state,
+                    is_leaf=lambda x: isinstance(x, nnx.Variable)
+                )
                 
                 if unbatched_keys:
                     args_axes = tuple(
@@ -308,14 +308,15 @@ class TargetNetwork(NeuralNetwork):
                     args_axes = 0
                     kwargs_axes = 0
                     
-                vmap_forward = nnx.vmap(
-                    lambda network, a, k: network(*a, **k), 
-                    in_axes=(state_axes, args_axes, kwargs_axes)
-                )
+                @nnx.vmap(in_axes=(state_axes, args_axes, kwargs_axes)) 
+                def vmap_forward(state, args, kwargs):
+                    modified_network = nnx.merge(self.graphdef, state)
+                    return modified_network(*args, **kwargs)
                     
-                return vmap_forward(modified_network, args, kwargs)
+                return vmap_forward(new_state, args, kwargs)
             
             else:
+                modified_network = nnx.merge(self.graphdef, new_state)
                 return modified_network(*args, **kwargs)
         else:
             return self.network(*args, **kwargs)
