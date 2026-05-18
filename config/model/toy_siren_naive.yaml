@@ -25,7 +25,7 @@ proj_block:
   siren_in_features: 1
   rngs:
     _target_: flax.nnx.Rngs
-    params: 42
+    default: ${seed}
 
 # TARGET NETWORK
 target_block:

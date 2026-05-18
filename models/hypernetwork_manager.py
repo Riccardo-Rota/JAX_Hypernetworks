@@ -353,7 +353,6 @@ class ProjectionHead(NeuralNetwork):
                  in_features: int, 
                  input: Optional[List[Union[str, Dict[str, str]]]],
                  output: str,
-                 unbatched_inputs: Optional[Tuple[str, ...]] = None,
                  rngs: Optional[nnx.Rngs] = None,
                  kernel_init: Callable = nnx.initializers.lecun_normal(),
                  bias_init: Callable = nnx.initializers.zeros_init()):
@@ -467,13 +466,13 @@ class HypernetworkManager(nnx.Module):
             if isinstance(b, ProjectionHead):
                 if not b.output or len(b.output) != 1:
                     raise ValueError("ProjectionHead must have exactly one output mapped.")
-                block = b.clone()
-                out_object = block.output[0]
+                #block = b.clone()
+                out_object = b.output[0]
                 if out_object in weight_sizes:
-                    block.build(out_features=weight_sizes[out_object])
+                    b.build(out_features=weight_sizes[out_object])
                 else: # dangling projection heads with no corresponding weights fail loudly, to avoid silently accepting misconfigurations
                     raise ValueError(f"ProjectionHead output object '{out_object}' does not correspond to any weights in the TargetNetworks. Please check the mappings.")
-                built_blocks.append(block)
+                built_blocks.append(b)
             else:
                 built_blocks.append(b)
 

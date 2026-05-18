@@ -28,7 +28,7 @@ proj_block:
     _target_: flax.nnx.initializers.zeros_init
   rngs:
     _target_: flax.nnx.Rngs
-    params: 42
+    default: ${seed}
 
 # TARGET NETWORK
 target_block:

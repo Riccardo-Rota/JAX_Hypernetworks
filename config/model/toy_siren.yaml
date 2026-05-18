@@ -40,12 +40,24 @@ proj_block_other_kernels:
     _target_: flax.nnx.Rngs
     params: 42
 
-# PROJECTION HEAD FOR BIASES
-proj_block_bias:
+# PROJECTION HEAD FOR FIRST LAYER BIASES
+proj_block_first_biases:
   _target_: models.SirenHead
   in_features: 128
   input: latent_features
-  output: biases
+  output: first_layer_biases
+  mode: bias
+  siren_in_features: 1
+  rngs:
+    _target_: flax.nnx.Rngs
+    params: 42
+
+# PROJECTION HEAD FOR OTHER LAYER BIASES
+proj_block_other_biases:
+  _target_: models.SirenHead
+  in_features: 128
+  input: latent_features
+  output: other_layer_biases
   mode: bias
   siren_in_features: 1
   rngs:
@@ -68,7 +80,7 @@ target_first_layer:
 
   input: vars
   weights_mapping:
-    bias: biases
+    bias: first_layer_biases
     kernel: weights_first_kernel
   output: first_layer_output
 
@@ -87,7 +99,7 @@ target_other_layers:
 
   input: first_layer_output
   weights_mapping:
-    bias: biases
+    bias: other_layer_biases
     kernel: weights_other_kernels
   output: final_output
 
@@ -99,7 +111,8 @@ manager:
     - ${model.target_other_layers}
     - ${model.proj_block_first_kernel}
     - ${model.proj_block_other_kernels}
-    - ${model.proj_block_bias}
+    - ${model.proj_block_first_biases}
+    - ${model.proj_block_other_biases}
     - ${model.hyper_block}
 
   output: final_output
