@@ -91,13 +91,13 @@ def main(cfg: DictConfig) -> None:
     val_history = history['val_results']
 
     if "postprocessing" in cfg and ("output_plots" in cfg.postprocessing or "loss_plots" in cfg.postprocessing):
-        plots_path = 'plots'
+        plots_path = 'figures'
         os.makedirs(plots_path, exist_ok=True)
         print("\n--- Generating Plots ---")
         
         if "output_plots" in cfg.postprocessing:
             for name, config in cfg.postprocessing.output_plots.items():
-                hydra.utils.call(config, model=model, save_path=plots_path)
+                hydra.utils.call(config, model=model)
                 
         if "loss_plots" in cfg.postprocessing:
             for name, config in cfg.postprocessing.loss_plots.items():

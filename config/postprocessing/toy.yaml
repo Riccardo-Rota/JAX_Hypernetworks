@@ -12,17 +12,13 @@ loss_plots:
     logy: True
 
 
-# output_plots:
-#   predictions:
-#     _target_: postprocessing.plot_predictions_legacy
-#     N_examples: 4
-
-#     f_to_learn: ${data_source.train.f.f_string}
-
-#     hypernetwork: ${hypernetwork}
-#     targetnetwork: ${targetnetwork}
-
-#     # TODO: fix and make it general
-#     mu_domain: ${data_source.train.hyper_domains[0]}
-#     l_domain: ${data_source.train.hyper_domains[1]}
-#     k_domain: ${data_source.train.hyper_domains[2]}
+output_plots:
+  default_predictions:
+    _target_: postprocessing.generate_toy_plots
+    hypervars_set:
+      - [0.5, 0.5, 0.5]
+      - [1.0, 0.5, 1.0]
+      - [-1.0, 0.5, -1.0]
+    var_domains: ${data_source.base_toy.var_domains}
+    exact_function: ${data_source.base_toy.f}
+    n_points: 400

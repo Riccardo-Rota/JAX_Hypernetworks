@@ -26,10 +26,10 @@ class InMemoryHDF5Source(grain.RandomAccessDataSource):
         }, single_sample[3:] # density, pressure, velocity_x, velocity_y
     
     def dim_hypervars(self):
-        return self.__getitem__(0)["hypervars"].shape[0]
+        return self.__getitem__(0)[0]["hypervars"].shape[0]
     
     def dim_vars(self):
-        return self.__getitem__(0)["vars"].shape[0]
+        return self.__getitem__(0)[0]["vars"].shape[0]
     
     def dim_labels(self):
         return self.__getitem__(0)[1].shape[0]

@@ -80,12 +80,9 @@ def _check_non_empty_splits(train_t, val_t, test_t, chunk_size,
         if len(arr) == 0:
             per_chunk = chunk_size * ratio
             raise ValueError(
-                f"'{name}' split is empty: chunk_size ({chunk_size}) "
-                f"x {name}_ratio ({ratio}) = {per_chunk:.2f}, which "
-                f"rounds down to 0 timesteps per chunk.\n"
-                f"  Fix: increase chunk_size and/or {name}_ratio so that "
+                f"'{name}' split is empty\n"
+                f"Fix: increase chunk_size and/or {name}_ratio so that "
                 f"chunk_size x {name}_ratio ≥ 1. "
-                f"Current ratios: train={train_ratio}, val={val_ratio}, test={test_ratio}."
             )
 
 
@@ -104,7 +101,7 @@ def prepare_datasets(
             f"Split ratios must sum to 1. Got {train_ratio + val_ratio + test_ratio}"
         )
 
-    # ---- Load one trajectory --------------------------------------------------
+    # Load one trajectory
     with h5py.File(master_hdf5_path, "r") as f:
         n_traj = f["t0_fields"]["density"].shape[0]
         if trajectory_index >= n_traj:
@@ -123,7 +120,7 @@ def prepare_datasets(
 
     n_timesteps = len(time_points)
 
-    # ---- Temporal split ------------------------------------------------------
+    # Split in train, val, test along the time axis
     train_t, val_t, test_t = temporal_chunk_split(
         n_timesteps, chunk_size, train_ratio, val_ratio, seed
     )

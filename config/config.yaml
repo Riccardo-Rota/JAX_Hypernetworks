@@ -8,7 +8,7 @@ hydra:
 defaults:
   - training: default
   - optimizer: adam_cosine_onecycle
-  - problem: toy            # Controller for consistency across configs. Can be toy or turbulence.
+  - problem: toy            # Controller for consistency across configs: it can be toy or turbulence and realtes to data_source and postprocessing.
   - model: toy_mlp
   - preprocessing: preprocessing
   - override hydra/job_logging: colorlog

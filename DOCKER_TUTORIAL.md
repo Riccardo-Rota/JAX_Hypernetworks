@@ -36,3 +36,29 @@ Note: If you use environment variables via a `.env` file, do not hardcode them i
 ```
 **TODO**: decide what to do for last row at the end of the project
 
+## Build the Docker Image
+```
+    docker build -t my-python-app:latest .
+```
+where the `-t` flag tags the image with a name, and the `.` specifies the current directory as the build context.
+
+Watch the output. Docker will pull the base image, create the `/app` directory, install your dependencies from `requirements.txt`, and package your code.
+
+## Test the Container Locally
+```
+    docker run --rm -it my-python-app:latest
+```
+
+- `--rm`: Automatically removes the container instance after it stops.
+- `-it`: Runs the container interactively (useful if your script requires terminal input or if you need to see real-time output).
+
+## Export the Image
+Run the docker save command to create an archive of your built image
+```
+    docker save -o my-python-app.tar my-python-app:latest
+```
+**TODO**: choose if to push `my-python-app.tar` file or to send it to people
+
+## Load image on another device
+1. Load the image: `docker load -i my-python-app.tar`
+2. Run the application: `docker run --rm my-python-app:latest`

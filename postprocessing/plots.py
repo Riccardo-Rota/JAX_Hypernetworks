@@ -3,7 +3,8 @@ import jax
 import jax.numpy as jnp
 import flax.nnx as nnx
 import matplotlib.pyplot as plt
-from typing import Tuple, List, Optional, Callable, Union
+from typing import Tuple, List, Optional, Callable, Union, Sequence
+from collections.abc import Sequence
 import h5py
 from pathlib import Path
 import os
@@ -118,17 +119,17 @@ def plot_1d_predictions(
             raise ValueError(f"Expected second dimension to be 1, got shape {pred.shape}")
 
         # Plot prediction
-        plt.plot(var_values, pred, label=f"Prediction ({label_suffix})")
+        plt.plot(var_values, pred, label=f"Prediction")
 
         # Superimpose exact function
         if exact_function is not None:
             # Compute exact values using the vmapped function
             exact_y = batched_exact_fn(hypervars, var_values)
-            plt.plot(var_values, exact_y, label=f"Exact ({label_suffix})", linestyle="--")
+            plt.plot(var_values, exact_y, label=f"Exact", linestyle="--")
 
         plt.xlabel("x")
         plt.ylabel("Output")
-        plt.title("Model Predictions vs Exact Function")
+        plt.title(f"Model Predictions vs Exact Function for ({label_suffix})")
         plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
         plt.grid(True)
 
@@ -392,30 +393,69 @@ def plot_2d_hdf5_comparison(
         plt.close(fig)
 
 
-def generate_prediction_plots(
+def generate_toy_plots(
     model: nnx.Module,
-    hypervars_sets: jnp.ndarray,
-    var_domains: Union[Tuple[float, float], List[Tuple[float, float]]],
-    var_labels: Union[str, List[str]],
-    output_labels: List[str],
-    save_dir: str,
-    n_points: int = 100
+    hypervars_set: Sequence[Union[jnp.ndarray, Sequence[float]]],
+    var_domains: Union[Sequence[float], Sequence[Sequence[float]]],
+    output_idx: Optional[int] = None,
+    exact_function: Optional[Callable] = None,
+    n_points: Optional[int] = 400
 ):
     """
-    Generates and saves prediction plots for different sets of hypervariables.
-    Dispatches to 1D or 2D plotting functions based on number of variables.
-    """
-    os.makedirs(save_dir, exist_ok=True)
-    num_vars = 1 if isinstance(var_labels, str) else len(var_labels)
+    General router for generating toy problem plots. 
+    Redirects to 1D or 2D plotting functions based on the number of input variables.
 
-    for i, hypervars in enumerate(hypervars_sets):
-        hypervar_str = "_".join([f"{v:.2f}" for v in hypervars])
+    Args:
+        model (nnx.Module): The final trained network.
+        hypervars_set (Sequence[Union[jnp.ndarray, Sequence[float]]]): A sequence containing individual 1D arrays of hypervariables.
+        var_domains (Union[Sequence[float], Sequence[Sequence[float]]]): 
+            For 1D: A single sequence (min, max).
+            For 2D: A sequence of two sequences ((min1, max1), (min2, max2)).
+        output_idx (Optional[int], optional): The index to extract from the model output if it returns a tuple.
+        exact_function (Optional[Callable], optional): A reference ground-truth function.
+        n_points (Optional[int], optional): Resolution of the grid.
+    """
+
+    if len(hypervars_set) > 0 and isinstance(hypervars_set[0], jnp.ndarray):
+        # Ensure it is a tuple for downstream consistency
+        clean_hypervars = tuple(hypervars_set)
+    else:
+        # Cast Hydra ListConfigs or standard lists to JAX arrays
+        clean_hypervars = tuple(jnp.array(hv) for hv in hypervars_set)
+    
+    # Determine dimensionality from var_domains structure
+    if isinstance(var_domains[0], (int, float)):
+        num_vars = 1
+        domain_1d = tuple(var_domains)
+    elif isinstance(var_domains[0], Sequence):
+        # Nested sequence provided
+        num_vars = len(var_domains)
         if num_vars == 1:
-            save_path = os.path.join(save_dir, f"plot_1d_{hypervar_str}.png")
-            plot_1d_predictions(model=model, hypervars_set=hypervars, var_domain=var_domains, var_label=var_labels, output_labels=output_labels, save_path=save_path, n_points=n_points)
-        elif num_vars == 2:
-            save_path = os.path.join(save_dir, f"plot_2d_{hypervar_str}.png")
-            plot_2d_predictions(model=model, hypervars_set=hypervars, var_domains=var_domains, var_labels=var_labels, output_labels=output_labels, save_path=save_path, n_points_per_dim=n_points)
-        else:
-            print(f"Plotting for {num_vars} variables not supported. Skipping.")
-            continue
+            domain_1d = tuple(var_domains[0])
+    else:
+        raise ValueError("Invalid var_domains format. Must be a flat tuple for 1D or a sequence of tuples for ND.")
+
+    # Check limits
+    if num_vars > 2:
+        raise ValueError(f"Function only supports up to 2 variables. Received var_domains for {num_vars} variables.")
+
+    # Route to specific plotting functions
+    if num_vars == 1:
+        plot_1d_predictions(
+            model=model,
+            hypervars_set=clean_hypervars,
+            var_domain=domain_1d,
+            output_idx=output_idx,
+            exact_function=exact_function,
+            n_points=n_points
+        )
+    elif num_vars == 2:
+        clean_var_domains = tuple(tuple(d) for d in var_domains)
+        plot_2d_predictions(
+            model=model,
+            hypervars_set=clean_hypervars,
+            var_domains=clean_var_domains,
+            output_idx=output_idx,
+            exact_function=exact_function,
+            n_points=n_points
+        )
