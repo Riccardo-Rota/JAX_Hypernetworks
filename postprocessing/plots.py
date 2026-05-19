@@ -260,46 +260,39 @@ def plot_2d_predictions(
 def plot_2d_hdf5_comparison(
     model: nnx.Module,
     file_path: str,
-    output_label: str,
     schema: Dict[str, int],
+    target_keys: Sequence[str],
     num_plots: Optional[int] = None,
-    output_idx: Optional[int] = None,
     dataset_key: Optional[str] = None,
     time_tolerance: float = 1e-5
 ):
     """
     Evaluates a hypernetwork against ground-truth data from an HDF5 file.
-    Generates a 1x3 grid (Prediction, Exact, Error) for each timestep.
+    Plots every output from the model. Matches the first outputs to the provided target_keys.
 
     Args:
         model (nnx.Module): The final trained network.
         file_path (str): Path to the .hdf5 dataset file.
-        output_label (str): The target variable ("density", "pressure", "velocity_x", "velocity_y").
-        schema (Dict[str, int]): A mapping from variable names to their corresponding column indices in the HDF5 dataset.
-        num_plots (Optional[int], optional): Number of distinct time points to plot. 
-            If None or greater than available timesteps, plots all available timesteps.
-        output_idx (Optional[int], optional): Index to extract if the model returns a tuple. Defaults to None.
-        dataset_key (Optional[str], optional): The HDF5 internal key. Defaults to the first available key.
-        time_tolerance (float, optional): Tolerance for floating-point time matching. Defaults to 1e-5.
+        schema (Dict[str, int]): Mapping from variable names to HDF5 column indices.
+        target_keys (Sequence[str]): Ordered list of target variables expected from the model 
+            (e.g., ["density", "pressure"]).
+        num_plots (Optional[int], optional): Number of distinct time points to plot.
+        dataset_key (Optional[str], optional): The HDF5 internal key. Defaults to first available.
+        time_tolerance (float, optional): Tolerance for floating-point time matching.
     """
-    if output_label not in schema:
-        raise ValueError(f"Invalid output_label: '{output_label}'. Not found in schema.")
-
     required_keys = ["time", "x", "y"]
     for req in required_keys:
         if req not in schema:
             raise KeyError(f"Required key '{req}' is missing from the provided schema.")
 
-    if output_label in required_keys:
-        raise ValueError(f"output_label cannot be a coordinate or time axis ('{output_label}').")
+    for key in target_keys:
+        if key not in schema:
+            raise KeyError(f"Target key '{key}' is missing from the provided schema.")
 
-    # Setup output directory
     directory = Path("figures")
     directory.mkdir(parents=True, exist_ok=True)
-    base_name = f"comparison_2d_{output_label}"
     extension = ".png"
 
-    # Load HDF5 Data into memory once
     with h5py.File(file_path, 'r') as f:
         if dataset_key is None:
             dataset_key = list(f.keys())[0]
@@ -307,26 +300,21 @@ def plot_2d_hdf5_comparison(
 
     time_column = data[:, schema["time"]]
 
-    # Extract unique, sorted timesteps from the dataset
     unique_times = np.unique(time_column)
     unique_times.sort()
 
     if len(unique_times) == 0:
         raise ValueError("No time data found in the dataset.")
 
-    # Determine which timesteps to evaluate
     if num_plots is not None and num_plots < len(unique_times):
-        # Linearly sample indices to get a representative spread of the simulation
         indices = np.linspace(0, len(unique_times) - 1, num_plots, dtype=int)
         selected_times = unique_times[indices]
     else:
         selected_times = unique_times
 
     for i, target_time in enumerate(selected_times):
-        # Create hypervars array for the current timestep
         hypervars = jnp.array([target_time])
 
-        # Select only data with the target time
         mask = np.isclose(time_column, target_time, atol=time_tolerance)
         timestep_data = data[mask]
 
@@ -336,81 +324,83 @@ def plot_2d_hdf5_comparison(
 
         x_np = timestep_data[:, schema["x"]]
         y_np = timestep_data[:, schema["y"]]
-        exact_z = timestep_data[:, schema[output_label]]
 
-        # Prepare model inputs: stack x and y into shape (N, 2)
         var_values = jnp.stack([jnp.array(x_np), jnp.array(y_np)], axis=-1)
         model_data = {"hypervars": hypervars, "vars": var_values}
 
-        # Execute forward pass
         output = model(model_data, unbatched_keys=["hypervars"])
 
-        # Check output dimensionality and extract prediction
+        # Flatten the model output into a sequential list of 1D arrays
+        predictions = []
         if isinstance(output, tuple):
-            if output_idx is None:
-                raise ValueError("Model returned a tuple, but output_idx is None.")
-            try:
-                pred_z = output[output_idx]
-            except IndexError:
-                raise IndexError(f"output_idx {output_idx} is out of bounds for tuple of length {len(output)}.")
-            
-            if pred_z.ndim > 1 and pred_z.shape[1] > 1:
-                raise ValueError(f"Extracted array from tuple has second dimension > 1 (shape: {pred_z.shape}). Expected a 1D or single-column array.")
+            for out_tensor in output:
+                if out_tensor.ndim == 1 or (out_tensor.ndim > 1 and out_tensor.shape[1] == 1):
+                    predictions.append(out_tensor.flatten())
+                else:
+                    for col in range(out_tensor.shape[1]):
+                        predictions.append(out_tensor[:, col].flatten())
         else:
-            if output.ndim > 1 and output.shape[1] > 1:
-                if output_idx is None:
-                    raise ValueError(f"Model returned an array with multiple columns (shape {output.shape}), but output_idx is None.")
-                try:
-                    # Extract specific column
-                    pred_z = output[:, output_idx]
-                except IndexError:
-                    raise IndexError(f"output_idx {output_idx} is out of bounds for array with {output.shape[1]} columns.")
+            if output.ndim == 1 or (output.ndim > 1 and output.shape[1] == 1):
+                predictions.append(output.flatten())
             else:
-                pred_z = output
+                for col in range(output.shape[1]):
+                    predictions.append(output[:, col].flatten())
 
-        # tricontourf expects a flat 1D array for z. Safely flatten before plotting.
-        pred_z = pred_z.flatten()
+        # Iterate through every extracted prediction
+        for out_idx, pred_z in enumerate(predictions):
+            
+            # Case A: Prediction has a corresponding exact target in the HDF5 file
+            if out_idx < len(target_keys):
+                target_name = target_keys[out_idx]
+                exact_z = timestep_data[:, schema[target_name]]
+                error_z = jnp.abs(pred_z - exact_z)
 
-        # Calculate absolute error
-        error_z = jnp.abs(pred_z - exact_z)
+                fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+                vmin = min(np.nanmin(pred_z), np.nanmin(exact_z))
+                vmax = max(np.nanmax(pred_z), np.nanmax(exact_z))
 
-        # Plotting
-        fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+                c0 = axes[0].tricontourf(x_np, y_np, pred_z, levels=50, cmap='viridis', vmin=vmin, vmax=vmax)
+                fig.colorbar(c0, ax=axes[0])
+                axes[0].set_title(f"Prediction ({target_name})")
+                axes[0].set_xlabel("x")
+                axes[0].set_ylabel("y")
 
-        # Lock color scales between Prediction and Exact for accurate visual comparison
-        vmin = min(np.nanmin(pred_z), np.nanmin(exact_z))
-        vmax = max(np.nanmax(pred_z), np.nanmax(exact_z))
+                c1 = axes[1].tricontourf(x_np, y_np, exact_z, levels=50, cmap='viridis', vmin=vmin, vmax=vmax)
+                fig.colorbar(c1, ax=axes[1])
+                axes[1].set_title(f"Exact ({target_name.replace('_', ' ').title()})")
+                axes[1].set_xlabel("x")
+                axes[1].set_ylabel("y")
 
-        # 1. Prediction
-        c0 = axes[0].tricontourf(x_np, y_np, pred_z, levels=50, cmap='viridis', vmin=vmin, vmax=vmax)
-        fig.colorbar(c0, ax=axes[0])
-        axes[0].set_title("Model Prediction")
-        axes[0].set_xlabel("x")
-        axes[0].set_ylabel("y")
+                c2 = axes[2].tricontourf(x_np, y_np, error_z, levels=50, cmap='Reds')
+                fig.colorbar(c2, ax=axes[2])
+                axes[2].set_title("Absolute Error")
+                axes[2].set_xlabel("x")
+                axes[2].set_ylabel("y")
 
-        # 2. Exact
-        c1 = axes[1].tricontourf(x_np, y_np, exact_z, levels=50, cmap='viridis', vmin=vmin, vmax=vmax)
-        fig.colorbar(c1, ax=axes[1])
-        axes[1].set_title(f"Exact ({output_label.replace('_', ' ').title()})")
-        axes[1].set_xlabel("x")
-        axes[1].set_ylabel("y")
+                fig.suptitle(f"Evaluation at t = {target_time:.3f}", fontsize=14, y=1.05)
+                save_name = f"comparison_2d_t{i}_{target_name}{extension}"
 
-        # 3. Absolute Error
-        c2 = axes[2].tricontourf(x_np, y_np, error_z, levels=50, cmap='Reds')
-        fig.colorbar(c2, ax=axes[2])
-        axes[2].set_title("Absolute Error")
-        axes[2].set_xlabel("x")
-        axes[2].set_ylabel("y")
+            # Case B: Extra model output with no corresponding exact data
+            else:
+                target_name = f"extra_output_{out_idx}"
+                
+                fig, ax = plt.subplots(1, 1, figsize=(7, 5))
+                c0 = ax.tricontourf(x_np, y_np, pred_z, levels=50, cmap='viridis')
+                fig.colorbar(c0, ax=ax)
+                ax.set_title(f"Prediction ({target_name})\nNo Exact Data Available")
+                ax.set_xlabel("x")
+                ax.set_ylabel("y")
+                
+                fig.suptitle(f"Evaluation at t = {target_time:.3f}", fontsize=12, y=1.05)
+                save_name = f"comparison_2d_t{i}_{target_name}{extension}"
 
-        fig.suptitle(f"Evaluation at t = {target_time:.3f}", fontsize=14, y=1.05)
-        plt.tight_layout()
-
-        # Save and close
-        unique_save_path = directory / f"{base_name}_set_{i}{extension}"
-        plt.savefig(unique_save_path, bbox_inches='tight')
-        print(f"Plot saved to {unique_save_path.absolute()}")
-        plt.close(fig)
-
+            plt.tight_layout()
+            unique_save_path = directory / save_name
+            plt.savefig(unique_save_path, bbox_inches='tight')
+            plt.close(fig)
+            
+        print(f"Saved {len(predictions)} plots for timestep {i} (t={target_time:.3f}).")
+        
 
 def generate_toy_plots(
     model: nnx.Module,

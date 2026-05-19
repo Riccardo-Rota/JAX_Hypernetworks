@@ -5,5 +5,5 @@ problem_name: toy
 defaults:
   - /data_source: toy
   - /training: toy
-  - /model: toy_mlp
+  - /model: toy_siren
   - /postprocessing: toy

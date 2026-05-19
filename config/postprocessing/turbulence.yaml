@@ -15,4 +15,5 @@ output_plots:
   default_predictions:
     _target_: postprocessing.plot_2d_hdf5_comparison
     file_path: ${data_source.test.hdf5_path}
-    output_label: "pressure"
+    schema: ${data_source.schema}
+    target_keys: ${data_source.base_dataset.target_keys}
