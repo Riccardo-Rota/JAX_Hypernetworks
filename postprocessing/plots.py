@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 import flax.nnx as nnx
 import matplotlib.pyplot as plt
-from typing import Tuple, List, Optional, Callable, Union, Sequence
+from typing import Dict, Tuple, List, Optional, Callable, Union, Sequence
 from collections.abc import Sequence
 import h5py
 from pathlib import Path
@@ -260,8 +260,9 @@ def plot_2d_predictions(
 def plot_2d_hdf5_comparison(
     model: nnx.Module,
     file_path: str,
-    hypervars_set: Tuple[jnp.ndarray, ...],
     output_label: str,
+    schema: Dict[str, int],
+    num_plots: Optional[int] = None,
     output_idx: Optional[int] = None,
     dataset_key: Optional[str] = None,
     time_tolerance: float = 1e-5
@@ -273,21 +274,24 @@ def plot_2d_hdf5_comparison(
     Args:
         model (nnx.Module): The final trained network.
         file_path (str): Path to the .hdf5 dataset file.
-        hypervars_set (Tuple[jnp.ndarray, ...]): A tuple of 1D arrays, where each array 
-            contains the time value (t) for evaluation.
         output_label (str): The target variable ("density", "pressure", "velocity_x", "velocity_y").
+        schema (Dict[str, int]): A mapping from variable names to their corresponding column indices in the HDF5 dataset.
+        num_plots (Optional[int], optional): Number of distinct time points to plot. 
+            If None or greater than available timesteps, plots all available timesteps.
         output_idx (Optional[int], optional): Index to extract if the model returns a tuple. Defaults to None.
         dataset_key (Optional[str], optional): The HDF5 internal key. Defaults to the first available key.
         time_tolerance (float, optional): Tolerance for floating-point time matching. Defaults to 1e-5.
     """
-    # Map column indices of .hdf5 file to variable names
-    column_map = {
-        "time": 0, "x": 1, "y": 2, 
-        "density": 3, "pressure": 4, "velocity_x": 5, "velocity_y": 6
-    }
+    if output_label not in schema:
+        raise ValueError(f"Invalid output_label: '{output_label}'. Not found in schema.")
 
-    if output_label not in column_map or output_label in ["time", "x", "y"]:
-        raise ValueError(f"Invalid output_label: '{output_label}'.")
+    required_keys = ["time", "x", "y"]
+    for req in required_keys:
+        if req not in schema:
+            raise KeyError(f"Required key '{req}' is missing from the provided schema.")
+
+    if output_label in required_keys:
+        raise ValueError(f"output_label cannot be a coordinate or time axis ('{output_label}').")
 
     # Setup output directory
     directory = Path("figures")
@@ -301,11 +305,26 @@ def plot_2d_hdf5_comparison(
             dataset_key = list(f.keys())[0]
         data = f[dataset_key][:]
 
-    time_column = data[:, column_map["time"]]
+    time_column = data[:, schema["time"]]
 
-    for i, hypervars in enumerate(hypervars_set):
-        # Extract the scalar time value from the hypervariable array
-        target_time = float(hypervars[0])
+    # Extract unique, sorted timesteps from the dataset
+    unique_times = np.unique(time_column)
+    unique_times.sort()
+
+    if len(unique_times) == 0:
+        raise ValueError("No time data found in the dataset.")
+
+    # Determine which timesteps to evaluate
+    if num_plots is not None and num_plots < len(unique_times):
+        # Linearly sample indices to get a representative spread of the simulation
+        indices = np.linspace(0, len(unique_times) - 1, num_plots, dtype=int)
+        selected_times = unique_times[indices]
+    else:
+        selected_times = unique_times
+
+    for i, target_time in enumerate(selected_times):
+        # Create hypervars array for the current timestep
+        hypervars = jnp.array([target_time])
 
         # Select only data with the target time
         mask = np.isclose(time_column, target_time, atol=time_tolerance)
@@ -315,9 +334,9 @@ def plot_2d_hdf5_comparison(
             print(f"Skipping set {i}: No HDF5 data found for t={target_time} within tolerance.")
             continue
 
-        x_np = timestep_data[:, column_map["x"]]
-        y_np = timestep_data[:, column_map["y"]]
-        exact_z = timestep_data[:, column_map[output_label]]
+        x_np = timestep_data[:, schema["x"]]
+        y_np = timestep_data[:, schema["y"]]
+        exact_z = timestep_data[:, schema[output_label]]
 
         # Prepare model inputs: stack x and y into shape (N, 2)
         var_values = jnp.stack([jnp.array(x_np), jnp.array(y_np)], axis=-1)

@@ -19,6 +19,7 @@ output_plots:
       - [0.5, 0.5, 0.5]
       - [1.0, 0.5, 1.0]
       - [-1.0, 0.5, -1.0]
+      - [-0.5, 1.0, 2.0]
     var_domains: ${data_source.base_toy.var_domains}
     exact_function: ${data_source.base_toy.f}
     n_points: 400

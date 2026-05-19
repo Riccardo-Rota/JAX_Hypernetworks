@@ -1,11 +1,28 @@
-train:
+# "variable names to column indices" schema for this specific dataset type
+schema: &schema
+  time: 0
+  x: 1
+  y: 2
+  density: 3
+  pressure: 4
+  velocity_x: 5
+  velocity_y: 6
+
+base_dataset: &base_dataset
   _target_: data.InMemoryHDF5Source
-  hdf5_path: ${hydra:runtime.cwd}/data/turbulence_dataset_train.hdf5
+  schema: *schema
+  hypervar_keys: ["time"]
+  var_keys: ["x", "y"]
+  target_keys: ["density", "pressure", "velocity_x", "velocity_y"]
+
+train:
+  <<: *base_dataset
+  hdf5_path: ${dataset_root}/turbulence_dataset_train.hdf5
 
 val:
-  _target_: data.InMemoryHDF5Source
-  hdf5_path: ${hydra:runtime.cwd}/data/turbulence_dataset_val.hdf5
+  <<: *base_dataset
+  hdf5_path: ${dataset_root}/turbulence_dataset_val.hdf5
 
 test:
-  _target_: data.InMemoryHDF5Source
-  hdf5_path: ${hydra:runtime.cwd}/data/turbulence_dataset_test.hdf5
+  <<: *base_dataset
+  hdf5_path: ${dataset_root}/turbulence_dataset_test.hdf5

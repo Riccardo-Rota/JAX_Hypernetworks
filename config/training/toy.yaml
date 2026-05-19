@@ -1,0 +1,23 @@
+epochs: 1000
+batch_size: 1024
+learning_rate: 1.0e-3
+in_memory: true
+
+criterion:
+  _target_: losses.L2Loss
+
+metrics:
+  RRMSE:
+    _target_: metrics.RRMSE
+  MAE:
+    _target_: metrics.MAE
+  RMSE:
+    _target_: metrics.RMSE
+  
+
+early_stopping:
+  _target_: training.EarlyStopping
+  patience: 500
+  min_delta: 1.0e-8
+
+early_stopping_metric: RRMSE

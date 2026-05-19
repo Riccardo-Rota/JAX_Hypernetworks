@@ -3,14 +3,13 @@ hydra:
     name: default
     chdir: true
   run:
-    dir: runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: runs_${problem_name}/${now:%Y-%m-%d}/${now:%H-%M-%S}
+
+dataset_root: ${hydra:runtime.cwd}/datasets
 
 defaults:
-  - training: default
   - optimizer: adam_cosine_onecycle
   - problem: toy            # Controller for consistency across configs: it can be toy or turbulence and realtes to data_source and postprocessing.
-  - model: toy_mlp
-  - preprocessing: preprocessing
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
   - _self_

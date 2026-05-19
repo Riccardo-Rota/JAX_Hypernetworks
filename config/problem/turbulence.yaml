@@ -1,4 +1,10 @@
 # @package _global_
+
+problem_name: turbulence
+
 defaults:
+  - /preprocessing: turbulence
   - /data_source: turbulence
+  - /training: turbulence
+  - /model: turbulence_mlp
   - /postprocessing: turbulence

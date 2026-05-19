@@ -6,8 +6,8 @@ __pycache__/
 # Personalized Hydra output folders
 frontend/
 runs/
-runs_turbulence/
-runs_multiturbulence/
+runs_*/
+
 
 # Standard Hydra defaults (good to include just in case)
 outputs/

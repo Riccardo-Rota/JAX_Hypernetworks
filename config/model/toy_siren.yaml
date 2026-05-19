@@ -6,7 +6,11 @@ hyper_block:
 
   network:
     _target_: models.MLP
-    num_neurons: [3, 64, 64, 128]
+    num_neurons:
+      - ${len:${data_source.base_toy.hyper_domains}}
+      - 64
+      - 64
+      - 128
     activation_functions:
       _target_: models.get_tanh
     rngs:

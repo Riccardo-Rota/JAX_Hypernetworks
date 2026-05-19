@@ -1,5 +1,3 @@
-# model/toy_siren_naive.yaml
-
 # HYPERNETWORK
 hyper_block:
   _target_: models.Hypernetwork
@@ -7,7 +5,7 @@ hyper_block:
   network:
     _target_: models.MLP
     num_neurons:
-      - ${len:${data_source.base_toy.hyper_domains}}
+      - ${len:${data_source.base_dataset.hypervar_keys}}
       - 64
       - 64
       - 128
@@ -22,11 +20,14 @@ hyper_block:
 
 # PROJECTION HEAD
 proj_block:
-  _target_: models.SirenHead
+  _target_: models.ProjectionHead
   in_features: 128
   input: latent_features
   output: weights
-  siren_in_features: 1
+  kernel_init:
+    _target_: flax.nnx.initializers.lecun_normal
+  bias_init:
+    _target_: flax.nnx.initializers.zeros_init
   rngs:
     _target_: flax.nnx.Rngs
     default: ${seed}
@@ -34,19 +35,20 @@ proj_block:
 # TARGET NETWORK
 target_block:
   _target_: models.TargetNetwork
+
   network:
-    _target_: models.Siren
-    w0_first: 30.0
-    w0_last: 30.0
-    w0_other: 30.0
+    _target_: models.MLP
     num_neurons:
-      - ${len:${data_source.base_toy.var_domains}}
+      - ${len:${data_source.base_dataset.var_keys}}
       - 8
       - 8
-      - 1
+      - ${len:${data_source.base_dataset.target_keys}}
+    activation_functions:
+      _target_: models.get_tanh
     rngs:
       _target_: flax.nnx.Rngs
       default: ${seed}
+
   input: vars
   weights_mapping:
     all: weights

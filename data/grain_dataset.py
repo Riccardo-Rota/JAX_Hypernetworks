@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from typing import Callable, List, Tuple
+from typing import Callable, List, Sequence, Tuple, Dict
 import h5py
 import pickle
 import jax
@@ -10,9 +10,24 @@ import grain.python as grain
 class InMemoryHDF5Source(grain.RandomAccessDataSource):
     """Dataset Source to be used when loading the HDF5 file entirely into RAM for fast access."""
 
-    def __init__(self, hdf5_path: str):
+    def __init__(
+        self, 
+        hdf5_path: str,
+        schema: Dict[str, int],
+        hypervar_keys: Sequence[str],
+        var_keys: Sequence[str],
+        target_keys: Sequence[str],
+        dataset_key: str = 'data'
+    ):
         with h5py.File(hdf5_path, 'r') as f:
-            self._data = f['data'][:] # Load entirely into memory
+            self._data = f[dataset_key][:] # Load entirely into memory
+
+        try:
+            self.hypervar_indices = np.array([schema[key] for key in hypervar_keys], dtype=int)
+            self.var_indices = np.array([schema[key] for key in var_keys], dtype=int)
+            self.target_indices = np.array([schema[key] for key in target_keys], dtype=int)
+        except KeyError as e:
+            raise ValueError(f"Key {e} not found in schema. Available keys: {list(schema.keys())}")
 
     def __len__(self):
         return len(self._data)
@@ -21,18 +36,18 @@ class InMemoryHDF5Source(grain.RandomAccessDataSource):
         single_sample = self._data[idx]
 
         return {
-            "hypervars": single_sample[0:1],       # time
-            "vars": single_sample[1:3],            # x,y
-        }, single_sample[3:] # density, pressure, velocity_x, velocity_y
-    
+            "hypervars": single_sample[self.hypervar_indices],
+            "vars": single_sample[self.var_indices],
+        }, single_sample[self.target_indices]
+
     def dim_hypervars(self):
-        return self.__getitem__(0)[0]["hypervars"].shape[0]
+        return len(self.hypervar_indices)
     
     def dim_vars(self):
-        return self.__getitem__(0)[0]["vars"].shape[0]
+        return len(self.var_indices)
     
     def dim_labels(self):
-        return self.__getitem__(0)[1].shape[0]
+        return len(self.target_indices)
 
 
 class ToyDataSource(grain.RandomAccessDataSource):
