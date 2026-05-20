@@ -1,8 +1,0 @@
-_target_: models.MLP
-
-num_neurons: [1, 64, 64, 128, null]
-activation_functions:
-  _target_: models.get_tanh
-rngs:
-  _target_: flax.nnx.Rngs
-  default: ${seed}
