@@ -14,6 +14,8 @@ import grain.python as grain
 from optax.contrib._reduce_on_plateau import ReduceLROnPlateauState
 from data.grain_dataset import build_dataset
 from flax.training import early_stopping as flax_early_stopping
+from utils import extract_lr_info
+
 
 def perform_step(
     model: nnx.Module,
@@ -158,7 +160,8 @@ def train_model(
         else:
             raise ValueError("metrics must be either a MultiMetric instance, a dictionary of metrics, or None.")
 
-    history = {'train_results': [], 'val_results': [],  'lrs': []}
+    # Initialize history to store train and validation results for each epoch. Learning rate info added if found.
+    history = {'train_results': [], 'val_results': []}
 
     early_stopping_metric_name = check_metric_name(early_stopping_metric, metrics._metric_names)
     if early_stopping_metric_name == -1:
@@ -189,25 +192,47 @@ def train_model(
                                                                        loss_eval_prev=loss_plateau_scheduler)
         train_results_epoch = {'loss': train_loss, **train_metrics}
         val_results_epoch   = {'loss': val_loss, **val_metrics}
-        # if reduce on plateau present, save it, otherwise constant 1.0 (NON MOLTO GENERALE: PREVEDE CHE PLATEAU SIA SECONDO OPTAX IN CHAIN)
-        if isinstance(optimizer.opt_state[1], ReduceLROnPlateauState):
-            lr_scale = optimizer.opt_state[1].scale.value
-        else:
-            lr_scale = 1.0
+
         history['train_results'].append(train_results_epoch)
         history['val_results'].append(val_results_epoch)
-        history['lrs'].append(lr_scale)
+
+        # Extract learning rate information from the optimizer
+        base_lr, lr_scale = extract_lr_info(optimizer.opt_state)
+
+        # Nothing loged if inject_hyperparams was not used
+        lr_log_str_compact = ""
+        lr_log_str_detail = ""
+
+        # Save learning rate info to history if found
+        if base_lr is not None:
+            # If reduce_on_plateau not used, scale defaults to 1.0
+            current_scale = lr_scale if lr_scale is not None else 1.0
+            effective_lr = base_lr * current_scale
+
+            # Initialize history keys dynamically on the first pass
+            if 'lr' not in history:
+                history['lr'] = []
+                history['lrs'] = []
+
+            history['lr'].append(effective_lr)
+            history['lrs'].append(current_scale)
+
+            # Format strings for the terminal output
+            lr_log_str_compact = f" - LR: {effective_lr:.2e} (Scale: {current_scale:.4f})"
+            lr_log_str_detail = f" - LR: {effective_lr:.8f} - LR multiplier: {current_scale:.8f}"
     
         log_compact = (
             f"Epoch {epoch+1}/{num_epochs} - "
             f"Train: {compact_format(train_results_epoch)} - "
             f"Val: {compact_format(val_results_epoch)} - "
-            f"LR Multiplier: {lr_scale:.4f}"
+            f"{lr_log_str_compact}"
         )
-        log_detail = f"Epoch {epoch+1}/{num_epochs} - " + \
-              f"Train: {', '.join(f'{k}: {v.item():.8f}' for k,v in train_results_epoch.items())} - " + \
-              f"Val: {', '.join(f'{k}: {v.item():.8f}' for k,v in val_results_epoch.items())} - " + \
-              f"LR multiplier: {lr_scale:.8f}"
+        log_detail = (
+            f"Epoch {epoch+1}/{num_epochs} - "
+            f"Train: {', '.join(f'{k}: {v.item():.8f}' for k,v in train_results_epoch.items())} - "
+            f"Val: {', '.join(f'{k}: {v.item():.8f}' for k,v in val_results_epoch.items())} - "
+            f"{lr_log_str_detail}"
+        )
         pbar.set_description(log_compact)
 
         if log_file_path:
@@ -219,10 +244,11 @@ def train_model(
             metric_for_es = val_results_epoch[early_stopping_metric_name]
             new_early_stopping = early_stopping.update(metric_for_es)
 
-            # If metric improved, patience_count is reset to 0.
-            if new_early_stopping.patience_count == 0:
+            # If metric improved, save the best epoch and model state
+            if new_early_stopping.has_improved:
                 best_epoch = epoch
-                best_state = nnx.state(model)
+                # TODO: fix using orbax checkpoints (saving whole state in RAM can be bottleneck)
+                #best_state = nnx.state(model)
 
             early_stopping = new_early_stopping
 
