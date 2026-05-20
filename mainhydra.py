@@ -18,7 +18,7 @@ import jax.random as random
 import matplotlib.pyplot as plt
 from training import train_model
 from inference import test_model
-from utils import to_basic_types
+from utils import to_basic_types, load_training_checkpoint
 from flax import nnx
 from typing import Optional
 import optax
@@ -57,8 +57,15 @@ def main(cfg: DictConfig) -> None:
         early_stopping = hydra.utils.instantiate(cfg.training.early_stopping, best_metric=float('inf'))
 
     log_path = os.path.join(run_path, 'training_log.txt')
-
+    checkpoint_path = os.path.join(run_path, 'checkpoints')
     optimizer = hydra.utils.instantiate(cfg.optimizer, model=model)
+    checkpoint_manager = load_training_checkpoint(
+        save_path=checkpoint_path,
+        checkpoint_frequency=cfg.training.get('checkpointing_frequency', None),
+        model=model,
+        optimizer=optimizer,
+        resume_path=cfg.training.get('resume_from_checkpoint', None)
+    )
 
     print("Starting training...")
     # Run Training
@@ -73,7 +80,8 @@ def main(cfg: DictConfig) -> None:
         criterion=criterion,
         metrics=metrics,
         early_stopping=early_stopping,
-        log_file_path=log_path
+        log_file_path=log_path,
+        checkpoint_manager=checkpoint_manager
     )
     end_time = time.time()
     print("Training completed.")
@@ -85,11 +93,6 @@ def main(cfg: DictConfig) -> None:
         metrics=metrics,
     )
     print(f"Test Metrics: {test_metrics}")  
-
-    # Save model parameters
-    saved_model_path = 'model_weights'
-    #save_model(model, saved_model_path) TODO: Implement model saving
-
     
     train_history = history['train_results']
     val_history = history['val_results']

@@ -15,6 +15,11 @@ from optax.contrib._reduce_on_plateau import ReduceLROnPlateauState
 from data.grain_dataset import build_dataset
 from flax.training import early_stopping as flax_early_stopping
 from utils import extract_lr_info
+import orbax.checkpoint as ocp
+import os
+from absl import logging
+
+logging.set_verbosity(logging.WARNING) # suppress verbose logging from Orbax
 
 
 def perform_step(
@@ -84,7 +89,6 @@ def perform_epoch(
     train_metrics = metrics
     val_metrics = copy.deepcopy(train_metrics)
 
-    #for batch in train_loader:
     for data, labels in train_loader:
         batch_size = labels.shape[0]
         train_loss, pred = perform_step(model = model,
@@ -123,6 +127,7 @@ def train_model(
         early_stopping: Optional[flax_early_stopping.EarlyStopping] = None,
         early_stopping_metric: Optional[Union[str, int]] = None,
         log_file_path: Optional[str] = None,
+        checkpoint_manager: Optional[ocp.CheckpointManager] = None
         ) -> tuple:
     """
     Train the model for a specified number of epochs, with optional early stopping and logging.
@@ -163,11 +168,27 @@ def train_model(
     if log_file_path:
         with open(log_file_path, "w") as f:
             f.write(f"Training Log - Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-
+    
     best_epoch = None
     best_state = None
 
-    pbar = tqdm(range(num_epochs))
+    # Setup checkpoint manager and resume if starting from a checkpoint
+    start_epoch = 0
+    best_ckpt_dir = None
+    best_checkpointer = None
+    if checkpoint_manager is not None:
+        latest = checkpoint_manager.latest_step()
+        if latest is not None:
+            start_epoch = latest + 1
+        best_ckpt_dir = os.path.join(str(checkpoint_manager.directory), "best")
+        best_checkpointer = ocp.StandardCheckpointer()
+        if os.path.exists(best_ckpt_dir):
+            _, original_params, _ = nnx.split(model, nnx.Param, ...)
+            abstract_params = jax.tree.map(lambda x: jax.ShapeDtypeStruct(x.shape, x.dtype), original_params)
+            best_state = best_checkpointer.restore(best_ckpt_dir, abstract_params)
+
+    # Main training loop
+    pbar = tqdm(range(start_epoch, num_epochs))
     for epoch in pbar:
         metrics.reset()
         train_iter = build_dataset(train_source, is_training=True,  batch_size=batch_size, seed=epoch)
@@ -229,28 +250,53 @@ def train_model(
 
         if early_stopping:
             metric_for_es = val_results_epoch[early_stopping_metric_name]
-            new_early_stopping = early_stopping.update(metric_for_es)
+            early_stopping = early_stopping.update(metric_for_es)
 
             # If metric improved, save the best epoch and model state
-            if new_early_stopping.has_improved:
+            if early_stopping.has_improved:
                 best_epoch = epoch
-                # TODO: fix using orbax checkpoints (saving whole state in RAM can be bottleneck)
-                #best_state = nnx.state(model)
-
-            early_stopping = new_early_stopping
+                _, best_state, _ = nnx.split(model, nnx.Param, ...)
 
             if early_stopping.should_stop:
                 if log_file_path:
                     with open(log_file_path, "a") as f:
                         f.write(f"Early stopping at epoch {epoch+1}. Best epoch was {best_epoch+1} with loss {early_stopping.best_metric:.8f}.\n")
-                # TODO: fix this: nnx.update does not work with current model structure (Python lists inside nnx.Modules)
-                # if best_state:
-                    # nnx.update(model, best_state)
+                if best_state is not None:
+                    nnx.update(model, best_state)
                 break
+
+            if epoch == num_epochs - 1 and best_epoch is not None and best_epoch != epoch:
+                if log_file_path:
+                    with open(log_file_path, "a") as f:
+                        f.write(f"Reached max epochs. Restoring best model from epoch {best_epoch+1} with loss {early_stopping.best_metric:.8f}.\n")
+                nnx.update(model, best_state)
+
+        if checkpoint_manager is not None and checkpoint_manager.should_save(epoch):
+            _, params, _ = nnx.split(model, nnx.Param, ...)
+            _, opt_state = nnx.split(optimizer)
+            save_payload = {
+                'model': params,
+                'optimizer': opt_state,
+                'epoch': epoch
+            }
+            # save asynchronously to avoid blocking the training loop
+            checkpoint_manager.save(
+                epoch, 
+                args=ocp.args.StandardSave(save_payload)
+            )
+            if best_state is not None:
+                best_checkpointer.save(best_ckpt_dir, best_state, force=True)
 
     if log_file_path:
         with open(log_file_path, "a") as f:
             f.write(f"Training Log - End time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+
+    if best_checkpointer is not None and best_state is not None:
+        best_checkpointer.save(best_ckpt_dir, best_state, force=True)
+        best_checkpointer.wait_until_finished() 
+
+    if checkpoint_manager is not None:
+        checkpoint_manager.wait_until_finished()
 
     return history, early_stopping, best_epoch
 

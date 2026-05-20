@@ -1,0 +1,1 @@
+{"array_metadatas": [{"array_metadata": {"param_name": "linear1.kernel.value", "write_shape": [4, 4], "chunk_shape": [4, 4], "ext_metadata": null}}, {"array_metadata": {"param_name": "linear2.kernel.value", "write_shape": [4, 4], "chunk_shape": [4, 4], "ext_metadata": null}}]}

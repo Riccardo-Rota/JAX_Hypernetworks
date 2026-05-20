@@ -1,86 +1,78 @@
-import os
-if 'JAX_PLATFORMS' not in os.environ:
-    try:
-        from jax import devices
-        if not any(d.platform == 'gpu' for d in devices()): os.environ['JAX_PLATFORMS'] = 'cpu'
-    except Exception:
-        os.environ['JAX_PLATFORMS'] = 'cpu'
-import orbax.checkpoint as ocp
 from flax import nnx
+import orbax.checkpoint as ocp
+from absl import logging
+from flax import nnx
+from typing import Tuple, Optional
+import jax
+import os
 
-# TODO: CHECK IF THIS WORKS
+logging.set_verbosity(logging.WARNING) # suppress verbose logging from Orbax
 
 def save_model(model: nnx.Module, path: str):
     """
-    Saves an nnx model to an Orbax checkpoint.
-    Args:
-        model: nnx model to be saved.
-        path: Path where the model will be saved.
+    Saves only the learnable parameters of the nnx model.
     """
-    graphdef, state = nnx.split(model)
-    save_data = {'graphdef': graphdef, 'state': state}
+    _, params, _ = nnx.split(model, nnx.Param, ...)
     checkpointer = ocp.StandardCheckpointer()
-    checkpointer.save(path, state=state)
-
-def load_model(path: str):
-    """
-    Loads an nnx model from an Orbax checkpoint.
-    Args:
-        path: Path from which the model will be loaded.
-    """
-    checkpointer = ocp.StandardCheckpointer()
-    restored_data = checkpointer.restore(path)
-    graphdef = restored_data['graphdef']
-    state = restored_data['state']
-    model = nnx.merge(graphdef, state)
-
-    return model
-
-
-# ================================================================ #
-
-from flax import nnx
-import orbax.checkpoint as ocp
-import jax
-from jax import numpy as jnp
-import numpy as np
-
-class TwoLayerMLP(nnx.Module):
-    def __init__(self, dim, rngs: nnx.Rngs):
-        self.linear1 = nnx.Linear(dim, dim, rngs=rngs, use_bias=False)
-        self.linear2 = nnx.Linear(dim, dim, rngs=rngs, use_bias=False)
-
-    def __call__(self, x):
-        x = self.linear1(x)
-        return self.linear2(x)
-        
-def main():
-    import pathlib
-    ckpt_dir = ocp.test_utils.erase_and_create_empty('my-checkpoints/')
-    ckpt_dir = pathlib.Path(ckpt_dir).absolute()
-    # Instantiate the model and show we can run it.
-    model = TwoLayerMLP(4, rngs=nnx.Rngs(0))
-    x = jax.random.normal(jax.random.key(42), (3, 4))
-    assert model(x).shape == (3, 4)
-    _, state = nnx.split(model)
-    nnx.display(state)
-    checkpointer = ocp.StandardCheckpointer()
-    checkpointer.save(ckpt_dir / 'state', state)
+    checkpointer.save(path, params)
     checkpointer.wait_until_finished()
 
-    abstract_model = nnx.eval_shape(lambda: TwoLayerMLP(4, rngs=nnx.Rngs(0)))
-    graphdef, abstract_state = nnx.split(abstract_model)
-    print('The abstract NNX state (all leaves are abstract arrays):')
-    nnx.display(abstract_state)
+def load_model(model: nnx.Module, path: str, abstract_params):
+    """
+    Restores the learnable parameters and updates the existing model in-place.
+    """
+    checkpointer = ocp.StandardCheckpointer()
+    restored_params = checkpointer.restore(path, abstract_params)
+    nnx.update(model, restored_params)
 
-    state_restored = checkpointer.restore(ckpt_dir / 'state', abstract_state)
-    jax.tree.map(np.testing.assert_array_equal, state, state_restored)
-    print('NNX State restored: ')
-    nnx.display(state_restored)
 
-    # The model is now good to use!
-    model = nnx.merge(graphdef, state_restored)
-    assert model(x).shape == (3, 4)
+def load_training_checkpoint(
+    save_path: str,
+    checkpoint_frequency: Optional[int],
+    model: nnx.Module,
+    optimizer: nnx.Optimizer,
+    resume_path: Optional[str] = None
+) -> ocp.CheckpointManager:
+    """
+    Initializes the CheckpointManager for saving new checkpoints, and restores 
+    active model/optimizer weights if a checkpoint exists in the load directory.
+    """
+    options = ocp.CheckpointManagerOptions(
+        max_to_keep=3,
+        save_interval_steps=checkpoint_frequency,
+        create=True
+    )
+    manager = ocp.CheckpointManager(os.path.abspath(save_path), options=options)
 
-if __name__ == "__main__":
-    main()
+    load_dir = resume_path if resume_path else save_path
+    
+    if load_dir == save_path:
+        load_manager = manager 
+    else:
+        load_manager = ocp.CheckpointManager(os.path.abspath(load_dir))
+    latest_step = load_manager.latest_step()
+    
+    if latest_step is not None:
+        print(f"Found active checkpoint at epoch {latest_step} in '{load_dir}'. Restoring active weights...")
+        
+        _, original_params, _ = nnx.split(model, nnx.Param, ...)
+        _, original_opt_state = nnx.split(optimizer)
+
+        abstract_params = jax.tree.map(lambda x: jax.ShapeDtypeStruct(x.shape, x.dtype), original_params)
+        abstract_opt_state = jax.tree.map(lambda x: jax.ShapeDtypeStruct(x.shape, x.dtype), original_opt_state)
+
+        abstract_payload = {
+            'model': abstract_params,
+            'optimizer': abstract_opt_state,
+            'epoch': 0
+        }
+
+        restored_payload = load_manager.restore(
+            latest_step, 
+            args=ocp.args.StandardRestore(abstract_payload)
+        )
+
+        nnx.update(model, restored_payload['model'])
+        nnx.update(optimizer, restored_payload['optimizer'])
+
+    return manager
