@@ -1,6 +1,6 @@
 _target_: flax.nnx.Optimizer
 tx:
-  _target_: optax.adam
+  _target_: ${ho_func:optax.inject_hyperparams,optax.adam}
   learning_rate:
     _target_: optax.schedules.cosine_decay_schedule
     init_value: ${training.learning_rate}

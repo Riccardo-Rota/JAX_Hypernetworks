@@ -218,8 +218,8 @@ def train_model(
             history['lrs'].append(current_scale)
 
             # Format strings for the terminal output
-            lr_log_str_compact = f" - LR: {effective_lr:.2e} (Scale: {current_scale:.4f})"
-            lr_log_str_detail = f" - LR: {effective_lr:.8f} - LR multiplier: {current_scale:.8f}"
+            lr_log_str_compact = f"LR: {effective_lr:.2e} (Scale: {current_scale:.4f})"
+            lr_log_str_detail = f"LR: {effective_lr:.8f} - LR multiplier: {current_scale:.8f}"
     
         log_compact = (
             f"Epoch {epoch+1}/{num_epochs} - "

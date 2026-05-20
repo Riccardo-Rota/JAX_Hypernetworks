@@ -1,4 +1,4 @@
 _target_: flax.nnx.Optimizer
 tx:
-  _target_: optax.adam
+  _target_: ${ho_func:optax.inject_hyperparams,optax.adam}
   learning_rate: ${training.learning_rate}
