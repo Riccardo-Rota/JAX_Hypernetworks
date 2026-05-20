@@ -256,7 +256,6 @@ def plot_2d_predictions(
         plt.close(fig)
 
 
-
 def plot_2d_hdf5_comparison(
     model: nnx.Module,
     file_path: str,
@@ -399,8 +398,6 @@ def plot_2d_hdf5_comparison(
             plt.savefig(unique_save_path, bbox_inches='tight')
             plt.close(fig)
             
-        print(f"Saved {len(predictions)} plots for timestep {i} (t={target_time:.3f}).")
-        
 
 def generate_toy_plots(
     model: nnx.Module,

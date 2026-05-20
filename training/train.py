@@ -13,7 +13,7 @@ from datetime import datetime
 import grain.python as grain
 from optax.contrib._reduce_on_plateau import ReduceLROnPlateauState
 from data.grain_dataset import build_dataset
-from .early_stopping import EarlyStopping
+from flax.training import early_stopping as flax_early_stopping
 
 def perform_step(
     model: nnx.Module,
@@ -114,8 +114,6 @@ def perform_epoch(
 
     return train_loss_epoch, train_metrics.compute(), val_loss_epoch, val_metrics.compute()
 
-#perform_epoch = nnx.jit(perform_epoch, static_argnames=("train_loader", "val_loader"))
-
 def train_model(
         model: nnx.Module,
         train_source: grain.RandomAccessDataSource,
@@ -125,7 +123,7 @@ def train_model(
         batch_size: int = 32,
         criterion: nnx.Module = L2Loss(),
         metrics: Optional[Union[MultiMetric, Dict[str, Metric]]] = None,
-        early_stopping: Optional[EarlyStopping] = None,
+        early_stopping: Optional[flax_early_stopping.EarlyStopping] = None,
         early_stopping_metric: Optional[Union[str, int]] = None,
         plateau_scheduler_metric: Optional[Union[str, int]] = None,
         log_file_path: Optional[str] = None,
@@ -141,12 +139,15 @@ def train_model(
         batch_size   (int): Batch size for both train and val pipelines.
         criterion (Callable, optional): The loss function to use. Default is optax.l2_loss.
         metrics (Dict[str, Callable], optional): A dictionary of metric functions to compute during the training. Default is None.
-        early_stopping (EarlyStopping, optional): An EarlyStopping object to monitor validation performance and stop training early if needed. Default is None.
+        early_stopping (flax.training.early_stopping.EarlyStopping, optional): An EarlyStopping object to monitor validation performance and stop training early if needed. Default is None.
         early_stopping_metric (str or int, optional): The metric to monitor for early stopping. Can be a metric name or index. Default is None (uses the validation loss).
         plateau_scheduler_metric (str or int, optional): The metric to monitor for learning rate plateau scheduling. Can be a metric name or index. Default is None (uses the validation loss).
         log_file_path (str, optional): Path to a log file where training progress will be logged. Default is None (no logging).
     Returns:
-        history (Dict[str, List[float]]): A dictionary containing training and validation losses and metrics for each epoch.
+        A tuple containing:
+            - history (Dict[str, List[float]]): A dictionary containing training and validation losses and metrics for each epoch.
+            - early_stopping (Optional[flax.training.early_stopping.EarlyStopping]): The final state of the early stopping object.
+            - best_epoch (Optional[int]): The epoch with the best validation metric, if early stopping was used.
     """
 
     if not isinstance(metrics, MultiMetric):
@@ -170,6 +171,9 @@ def train_model(
         with open(log_file_path, "w") as f:
             f.write(f"Training Log - Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
     loss_plateau_scheduler = jnp.inf
+
+    best_epoch = None
+    best_state = None
 
     pbar = tqdm(range(num_epochs))
     for epoch in pbar:
@@ -212,26 +216,30 @@ def train_model(
 
         loss_plateau_scheduler = val_results_epoch[plateau_scheduler_metric_name]
         if early_stopping:
-            loss_early_stopping = val_results_epoch[early_stopping_metric_name]
-            early_stopping(current_loss=loss_early_stopping,
-                           current_model=model,
-                           current_epoch=epoch)
+            metric_for_es = val_results_epoch[early_stopping_metric_name]
+            new_early_stopping = early_stopping.update(metric_for_es)
+
+            # If metric improved, patience_count is reset to 0.
+            if new_early_stopping.patience_count == 0:
+                best_epoch = epoch
+                best_state = nnx.state(model)
+
+            early_stopping = new_early_stopping
+
             if early_stopping.should_stop:
-                print(f"Early stopping at epoch {epoch+1}. Best epoch was {early_stopping.best_epoch+1} with loss {early_stopping.best_loss:.8f}.")
                 if log_file_path:
                     with open(log_file_path, "a") as f:
-                        f.write(f"Early stopping at epoch {epoch+1}. Best epoch was {early_stopping.best_epoch+1} with loss {early_stopping.best_loss:.8f}.\n")
-                # if early_stopping.best_model:
-                #     hypernetwork = early_stopping.best_model
-                if early_stopping.best_state:
-                    nnx.update(model, early_stopping.best_state)
+                        f.write(f"Early stopping at epoch {epoch+1}. Best epoch was {best_epoch+1} with loss {early_stopping.best_metric:.8f}.\n")
+                # TODO: fix this: nnx.update does not work with current model structure (Python lists inside nnx.Modules)
+                # if best_state:
+                    # nnx.update(model, best_state)
                 break
 
     if log_file_path:
         with open(log_file_path, "a") as f:
             f.write(f"Training Log - End time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
-    return history
+    return history, early_stopping, best_epoch
 
 
 def check_metric_name(metric: Union[str, int, None], name_metrics: Tuple[str]) -> int:

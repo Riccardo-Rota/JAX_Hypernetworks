@@ -16,7 +16,7 @@ from omegaconf import DictConfig, OmegaConf, ListConfig
 import jax.numpy as jnp
 import jax.random as random
 import matplotlib.pyplot as plt
-from training import train_model, assign_parameters, EarlyStopping
+from training import train_model
 from inference import test_model
 from utils import to_basic_types
 from flax import nnx
@@ -51,7 +51,11 @@ def main(cfg: DictConfig) -> None:
     # Instantiate Training Components
     criterion = hydra.utils.instantiate(cfg.training.criterion)
     metrics = {name: hydra.utils.instantiate(metric_cfg) for name, metric_cfg in cfg.training.metrics.items()}
-    early_stopping = hydra.utils.instantiate(cfg.training.early_stopping)
+
+    early_stopping = None
+    if 'early_stopping' in cfg.training and cfg.training.early_stopping:
+        early_stopping = hydra.utils.instantiate(cfg.training.early_stopping, best_metric=float('inf'))
+
     log_path = os.path.join(run_path, 'training_log.txt')
 
     optimizer = hydra.utils.instantiate(cfg.optimizer, model=model)
@@ -59,7 +63,7 @@ def main(cfg: DictConfig) -> None:
     print("Starting training...")
     # Run Training
     start_time = time.time()
-    history = train_model(
+    history, final_early_stopping, best_epoch = train_model(
         model=model,
         train_source=train_source,
         val_source=val_source,
@@ -104,16 +108,23 @@ def main(cfg: DictConfig) -> None:
                 save_path = os.path.join(plots_path, f"{name}.png")
                 hydra.utils.call(config, train_history=train_history, val_history=val_history, save_path=save_path)
 
+    num_epochs_run = len(history['train_results'])
+    if best_epoch is None:
+        # If early stopping was not used, the best epoch is the last one.
+        best_epoch = num_epochs_run - 1
+
+    es_triggered = final_early_stopping.should_stop if final_early_stopping else False
+
     # Save JSON with all info
     run_data = {
         'test_metrics': test_metrics,
-        'val_metrics': history['val_results'][early_stopping.best_epoch],
-        'train_metrics': history['train_results'][early_stopping.best_epoch],
-        'early_stopping_triggered': early_stopping.should_stop,
-        'num_epochs': len(history['train_results']),
-        'best_epoch': early_stopping.best_epoch,
+        'val_metrics': history['val_results'][best_epoch],
+        'train_metrics': history['train_results'][best_epoch],
+        'early_stopping_triggered': es_triggered,
+        'num_epochs': num_epochs_run,
+        'best_epoch': best_epoch,
         'training_time_seconds': end_time - start_time,
-        'time_per_epoch_seconds': (end_time - start_time) / len(history['train_results']),
+        'time_per_epoch_seconds': (end_time - start_time) / num_epochs_run,
         'training_history': {
             'train_results': history['train_results'],
             'val_results': history['val_results']
