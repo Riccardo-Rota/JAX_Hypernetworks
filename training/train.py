@@ -24,7 +24,6 @@ def perform_step(
     criterion: nnx.Module = L2Loss(),
     evaluation: bool = False,
     optimizer: Optional[nnx.Optimizer] = None,
-    loss_eval_prev: Optional[float] = None
 ):
     """
     Perform a single training (or evaluation) step.
@@ -35,7 +34,6 @@ def perform_step(
         criterion (Callable, optional): The loss function to use. Default is optax.l2_loss.
         evaluation (bool, optional): If True, performs an evaluation step without updating the optimizer. Default is False.
         optimizer (nnx.Optimizer, optional): The optimizer to use for updating the hypernetwork parameters. Required if evaluation is False.
-        loss_eval_prev (float, optional): Previous epoch evaluation loss, used for optimizers that require it. Default is None.
     Returns:
         loss (float): The computed loss for the step.
         pred (jax.Array): The predictions made by the model.
@@ -49,7 +47,7 @@ def perform_step(
         loss, pred = forward_pass(model, data, labels)
     else:
         (loss, pred), grads = nnx.value_and_grad(forward_pass, has_aux=True)(model, data, labels)
-        optimizer.update(grads, value=loss_eval_prev)
+        optimizer.update(grads, value=loss)
 
     return loss, pred
 
@@ -63,7 +61,6 @@ def perform_epoch(
         optimizer: Optional[nnx.Optimizer] = None,
         criterion: nnx.Module = L2Loss(),
         metrics: MultiMetric = MultiMetric(),
-        loss_eval_prev: Optional[float] = None
         ) -> tuple:
     """
     Perform a single training epoch.
@@ -74,7 +71,6 @@ def perform_epoch(
         optimizer (nnx.Optimizer, optional): The optimizer to use for updating the model parameters. Required for training.
         criterion (nnx.Module, optional): The loss function to use. Default is L2Loss().
         metrics (MultiMetric, optional): The metrics to use for evaluation. Default is MultiMetric().
-        loss_eval_prev (float, optional): Previous epoch evaluation loss, used for optimizers that require it. Default is None.
     Returns:
         train_loss_epoch (float): The average training loss for the epoch.
         train_metrics (Dict[str, float]): The average training metrics for the epoch.
@@ -95,8 +91,7 @@ def perform_epoch(
                                        data = data,
                                        labels = labels,
                                        optimizer = optimizer,
-                                       criterion = criterion,
-                                       loss_eval_prev = loss_eval_prev)
+                                       criterion = criterion)
         train_loss_epoch += train_loss * batch_size
         n_samples_train += batch_size
         train_metrics.update(predictions=pred, targets=labels)
@@ -127,7 +122,6 @@ def train_model(
         metrics: Optional[Union[MultiMetric, Dict[str, Metric]]] = None,
         early_stopping: Optional[flax_early_stopping.EarlyStopping] = None,
         early_stopping_metric: Optional[Union[str, int]] = None,
-        plateau_scheduler_metric: Optional[Union[str, int]] = None,
         log_file_path: Optional[str] = None,
         ) -> tuple:
     """
@@ -143,7 +137,6 @@ def train_model(
         metrics (Dict[str, Callable], optional): A dictionary of metric functions to compute during the training. Default is None.
         early_stopping (flax.training.early_stopping.EarlyStopping, optional): An EarlyStopping object to monitor validation performance and stop training early if needed. Default is None.
         early_stopping_metric (str or int, optional): The metric to monitor for early stopping. Can be a metric name or index. Default is None (uses the validation loss).
-        plateau_scheduler_metric (str or int, optional): The metric to monitor for learning rate plateau scheduling. Can be a metric name or index. Default is None (uses the validation loss).
         log_file_path (str, optional): Path to a log file where training progress will be logged. Default is None (no logging).
     Returns:
         A tuple containing:
@@ -166,14 +159,10 @@ def train_model(
     early_stopping_metric_name = check_metric_name(early_stopping_metric, metrics._metric_names)
     if early_stopping_metric_name == -1:
         raise ValueError("Invalid early_stopping_metric. It must be either None, a valid metric name or a valid metric index.")
-    plateau_scheduler_metric_name = check_metric_name(plateau_scheduler_metric, metrics._metric_names)
-    if plateau_scheduler_metric_name == -1:
-        raise ValueError("Invalid plateau_scheduler_metric. It must be either None, a valid metric name or a valid metric index.")
 
     if log_file_path:
         with open(log_file_path, "w") as f:
             f.write(f"Training Log - Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-    loss_plateau_scheduler = jnp.inf
 
     best_epoch = None
     best_state = None
@@ -188,8 +177,7 @@ def train_model(
                                                                        val_loader=val_iter, 
                                                                        optimizer=optimizer, 
                                                                        criterion=criterion, 
-                                                                       metrics=metrics,
-                                                                       loss_eval_prev=loss_plateau_scheduler)
+                                                                       metrics=metrics)
         train_results_epoch = {'loss': train_loss, **train_metrics}
         val_results_epoch   = {'loss': val_loss, **val_metrics}
 
@@ -239,7 +227,6 @@ def train_model(
             with open(log_file_path, "a") as f:
                 f.write(log_detail + "\n")
 
-        loss_plateau_scheduler = val_results_epoch[plateau_scheduler_metric_name]
         if early_stopping:
             metric_for_es = val_results_epoch[early_stopping_metric_name]
             new_early_stopping = early_stopping.update(metric_for_es)
