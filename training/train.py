@@ -18,6 +18,7 @@ from utils import extract_lr_info
 import orbax.checkpoint as ocp
 import os
 from absl import logging
+import wandb
 
 logging.set_verbosity(logging.WARNING) # suppress verbose logging from Orbax
 
@@ -127,7 +128,8 @@ def train_model(
         early_stopping: Optional[flax_early_stopping.EarlyStopping] = None,
         early_stopping_metric: Optional[Union[str, int]] = None,
         log_file_path: Optional[str] = None,
-        checkpoint_manager: Optional[ocp.CheckpointManager] = None
+        checkpoint_manager: Optional[ocp.CheckpointManager] = None,
+        use_wandb: bool = False
         ) -> tuple:
     """
     Train the model for a specified number of epochs, with optional early stopping and logging.
@@ -143,6 +145,8 @@ def train_model(
         early_stopping (flax.training.early_stopping.EarlyStopping, optional): An EarlyStopping object to monitor validation performance and stop training early if needed. Default is None.
         early_stopping_metric (str or int, optional): The metric to monitor for early stopping. Can be a metric name or index. Default is None (uses the validation loss).
         log_file_path (str, optional): Path to a log file where training progress will be logged. Default is None (no logging).
+        checkpoint_manager (ocp.CheckpointManager, optional): An Orbax CheckpointManager for saving model checkpoints during training. Default is None (no checkpointing).
+        use_wandb (bool, optional): Whether to log training metrics to Weights & Biases (wandb). Default is False.
     Returns:
         A tuple containing:
             - history (Dict[str, List[float]]): A dictionary containing training and validation losses and metrics for each epoch.
@@ -229,7 +233,17 @@ def train_model(
             # Format strings for the terminal output
             lr_log_str_compact = f"LR: {effective_lr:.2e} (Scale: {current_scale:.4f})"
             lr_log_str_detail = f"LR: {effective_lr:.8f} - LR multiplier: {current_scale:.8f}"
-    
+
+        if use_wandb:
+            wandb_payload = {}
+            for k, v in train_results_epoch.items():
+                wandb_payload[f"train/{k}"] = float(v) 
+            for k, v in val_results_epoch.items():
+                wandb_payload[f"val/{k}"] = float(v)
+            if base_lr is not None:
+                wandb_payload["train/learning_rate"] = float(effective_lr)
+            wandb.log(wandb_payload, step=epoch)
+
         log_compact = (
             f"Epoch {epoch+1}/{num_epochs} - "
             f"Train: {compact_format(train_results_epoch)} - "
@@ -297,6 +311,16 @@ def train_model(
 
     if checkpoint_manager is not None:
         checkpoint_manager.wait_until_finished()
+
+    if use_wandb and best_ckpt_dir is not None and os.path.exists(best_ckpt_dir):
+        print(f"Uploading best checkpoint to W&B from {best_ckpt_dir}...")
+        artifact = wandb.Artifact(
+            name=f"run-{wandb.run.id}-best-model", 
+            type="model",
+            metadata={"best_epoch": best_epoch} if best_epoch is not None else {}
+        )
+        artifact.add_dir(best_ckpt_dir)
+        wandb.log_artifact(artifact)
 
     return history, early_stopping, best_epoch
 

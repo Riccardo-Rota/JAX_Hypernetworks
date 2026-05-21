@@ -6,6 +6,7 @@ hydra:
     dir: runs_${problem_name}/${now:%Y-%m-%d}/${now:%H-%M-%S}
 
 dataset_root: ${hydra:runtime.cwd}/datasets
+use_wandb: true
 
 defaults:
   - optimizer: adam_cosine_onecycle
