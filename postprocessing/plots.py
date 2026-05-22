@@ -7,7 +7,6 @@ from typing import Dict, Tuple, List, Optional, Callable, Union, Sequence
 from collections.abc import Sequence
 import h5py
 from pathlib import Path
-import os
 
 def plot_loss_curves(train_history: List[dict], val_history: List[dict], save_path: str, logx: bool=False, logy: bool=False, loss_key: Optional[str]=None):
     """

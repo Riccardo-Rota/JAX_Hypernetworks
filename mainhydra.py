@@ -24,7 +24,7 @@ from typing import Optional
 import optax
 from losses import *
 from metrics import *
-import datetime, time
+import time
 from utils import save_model, register_resolvers
 import json
 import glob

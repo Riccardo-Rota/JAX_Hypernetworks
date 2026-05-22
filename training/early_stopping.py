@@ -1,5 +1,4 @@
 from flax import nnx
-import copy
 
 class EarlyStopping:
     def __init__(self, patience: int = 10, min_delta: float = 0.0):
