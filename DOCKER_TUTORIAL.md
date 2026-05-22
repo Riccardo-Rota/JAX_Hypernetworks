@@ -10,7 +10,7 @@
 ## Check installation
 1. Execute the version command on Ubuntu WSL terminal to verify the CLI can communicate with the daemon
 ```
-    docker versions
+    docker version
 ```
 
 2. Run test contianer
@@ -30,15 +30,10 @@
 ```
 Note: If you use environment variables via a `.env` file, do not hardcode them into the image. You will pass them at runtime
 2. Create a file named `Dockerfile` (no extension) in your project root. This file dictates the environment setup.
-**NOTE:** last row of `Dockerfile` defines the default command to run, modify if needed
-```
-    CMD ["python", "main.py"]
-```
-**TODO**: decide what to do for last row at the end of the project
 
 ## Build the Docker Image
 ```
-    docker build -t my-python-app:latest .
+    docker build -t image-name:latest .
 ```
 where the `-t` flag tags the image with a name, and the `.` specifies the current directory as the build context.
 
@@ -52,13 +47,35 @@ Watch the output. Docker will pull the base image, create the `/app` directory, 
 - `--rm`: Automatically removes the container instance after it stops.
 - `-it`: Runs the container interactively (useful if your script requires terminal input or if you need to see real-time output).
 
-## Export the Image
+## OPTION A: Export the Image as tar file
 Run the docker save command to create an archive of your built image
 ```
     docker save -o my-python-app.tar my-python-app:latest
 ```
 **TODO**: choose if to push `my-python-app.tar` file or to send it to people
 
-## Load image on another device
+To Load image on another device
 1. Load the image: `docker load -i my-python-app.tar`
 2. Run the application: `docker run --rm my-python-app:latest`
+
+## OPTION B: Push image on Docker Hub
+Enter your Docker Hub username and password (or access token) when prompted.
+```
+    docker login
+```
+
+Tag image
+```
+    docker tag jax-hypernetworks:latest your_dockerhub_username/jax-hypernetworks:latest
+```
+
+Push image
+```
+    docker push your_dockerhub_username/jax-hypernetworks:latest
+```
+
+Now external user just needs to do:
+
+```
+docker run --rm -v "$(pwd):/app" your_dockerhub_username/jax-hypernetworks:latest python main.py
+```
