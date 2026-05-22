@@ -8,6 +8,7 @@ frontend/
 runs/
 runs_*/
 my-checkpoints/
+chceckpoints/
 
 
 # Standard Hydra defaults (good to include just in case)
