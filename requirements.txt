@@ -1,16 +1,7 @@
-# Only DIRECT dependencies are listed here.
-# Transitive deps (sub-deps of these packages) are resolved
-# automatically by pip at build time, so listing them is both
-# redundant and fragile (version conflicts are harder to debug).
-#
-# CUDA packages (nvidia-*, jaxlib, jax-cuda12-*) are intentionally
-# OMITTED: they are pulled in automatically by jax[cuda12] below.
-# ─────────────────────────────────────────────────────────────────
+# Only DIRECT dependencies are listed here
 
-# ── Core ML frameworks ─────────────────────────────────────────
-# The [cuda12] extra installs jaxlib + all jax-cuda12-* wheels
-# automatically. On a CPU-only machine JAX auto-falls back to CPU.
-jax==0.6.1
+# Core ML frameworks
+jax[cuda12]==0.6.1
 flax==0.10.6
 optax==0.2.5
 orbax-checkpoint==0.11.14
@@ -18,27 +9,27 @@ einops==0.8.1
 grain==0.2.16
 networkx==3.5
 
-# ── Numerics & data ────────────────────────────────────────────
+# Numerics & data
 numpy==2.3.0
 scipy==1.15.3
 pandas==2.3.3
 matplotlib==3.10.5
 h5py==3.14.0
-pillow==11.3.0        # image I/O; remove if unused
+pillow==11.3.0
 absl-py==2.3.0
 
-# ── Hugging Face ecosystem ─────────────────────────────────────
+# Hugging Face ecosystem
 huggingface_hub==1.11.0
 
-# ── Config management (Hydra) ──────────────────────────────────
+# Config management (Hydra)
 hydra-core==1.3.2
 hydra-colorlog==1.2.0
 omegaconf==2.3.0
 
-# ── Experiment tracking ────────────────────────────────────────
+# Experiment tracking
 wandb==0.27.0
 
-# ── Utilities ──────────────────────────────────────────────────
+# Utilities
 tqdm==4.67.1
 rich==14.0.0
 typer==0.24.1

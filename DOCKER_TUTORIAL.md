@@ -19,15 +19,8 @@
 ```
 
 ## Create files
-1. In the root of your project, create a file named `.dockerignore` and add the following:
-```
-    venv/
-    env/
-    __pycache__/
-    *.pyc
-    .git/
-    .env
-```
+1. In the root of your project, create a file named `.dockerignore`
+
 Note: If you use environment variables via a `.env` file, do not hardcode them into the image. You will pass them at runtime
 2. Create a file named `Dockerfile` (no extension) in your project root. This file dictates the environment setup.
 

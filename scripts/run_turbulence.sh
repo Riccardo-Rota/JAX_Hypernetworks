@@ -11,7 +11,7 @@ IMAGE_NAME="leonardobocchieri/jax-hypernetworks:latest"
 echo "Starting container to run the Turbulence Problem..."
 echo "Executing: Download -> Preprocess -> Main"
 
-docker run -it --rm \
+docker run -it --rm --gpus all \
   -v "$PROJECT_ROOT/config:/app/config" \
   -v "$PROJECT_ROOT/dataset:/app/dataset" \
   -v "$PROJECT_ROOT/main.py:/app/main.py" \

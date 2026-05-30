@@ -1,7 +1,3 @@
-# Use python:3.12-slim as a base image for a CPU-only environment.
-# NOTE: This image does NOT include NVIDIA drivers or the CUDA toolkit.
-# JAX will run on CPU only. If GPU support is needed, consider using
-# a base image from NVIDIA, e.g., nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
 FROM python:3.12-slim
 
 # Prevent Python from writing .pyc files and from buffering stdout/stderr
@@ -14,12 +10,12 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Set the working directory in the container
 WORKDIR /app
 
-# Copy and install Python dependencies. This is done early to leverage Docker's layer caching.
+# Copy and install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --default-timeout=1000 --no-cache-dir -r requirements.txt
 
-# Copy your project's "library" code into the image.
-# We explicitly copy directories to exclude `mainhydra.py` and `config/`.
+# Copy your project's "library" code into the image
+# We explicitly copy directories to exclude `main.py` and `config/`
 COPY data /app/data/
 COPY inference /app/inference/
 COPY losses /app/losses/
