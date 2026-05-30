@@ -1,34 +1,22 @@
-# TODO
-- if mainhydra.py works for both, we can remove mainhydra_turbolence.py (and maybe just rename to main.py)
-- Once the dataset is ready, modify the following functions:
-    - postprocessing/plots.py: write plot_predictions1D and plot_prediction2D and delete plot_predictions_legacy
-    - mainhydra.py: remove lines 50-56 if possible
-    - utils/variable_generator.py: remove all file
-    - config folder: modify data folder
+# PACSproject TODO for replication
 
-
-# PACSproject
-
-To use the *visualization_turbulent_radiative_layer_2D* dataset, you need to install in your environment:
-
+1. Install Docker Desktop and open the Docker Desktop. Check if Docker is ready with:
 ```
-pip install the_well
+    docker --version
+```
+2. Clone repository
+3. Create dataset/ folder (TODO: need to check if strictly necessary)
+4. Make .sh file executable:
+```
+    chmod +x run_toy.sh scripts/run_turbulence.sh
+```
+5. Run the code, either toy or turbulence with:
+```
+    ./scripts/run_toy.sh
+```
+or
+```
+    ./scripts/run_turbulence.sh
 ```
 
-and then:
-
-```
-the-well-download --base-path path/to/base --dataset turbulent_radiative_layer_2D --split train
-```
-where path/to/base should be the path you want it to be installed in (starting from current path)
-
-IDEAS:
-Cleanliness of the code:
-- add abstract classes targetnetwork and hypernetwork? This would be useful to include parameters like replace_weights
-- testing function replicates code of training function
-- add something ready to use for inference?
-Future development:
-- use a graph structure (ask Riccardo) for connecting different modules of hypernetwork and targetnetwork
-- split hypernetwork in backbone and head:
-    -backbone acts as feature extractor: takes hyperparameters and produces a latent space
-    -head maps the latent space to the weights of the targetnetwork: we can design different heads with different initializations straegies to match the needs of the targetnetworks
+**BE AWARE**: User is cloning entire repository: they see all library folders in their local machine. However, bash script files use folders inside Docker container, which relies on its own baked-in copies of those library folders.

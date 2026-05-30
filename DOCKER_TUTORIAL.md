@@ -77,5 +77,5 @@ Push image
 Now external user just needs to do:
 
 ```
-docker run --rm -v "$(pwd):/app" your_dockerhub_username/jax-hypernetworks:latest python main.py
+    docker run --rm -v "$(pwd):/app" your_dockerhub_username/jax-hypernetworks:latest python main.py
 ```
