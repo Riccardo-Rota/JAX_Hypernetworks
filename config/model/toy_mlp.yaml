@@ -42,8 +42,8 @@ target_block:
     _target_: models.MLP
     num_neurons:
       - ${len:${data_source.base_toy.var_domains}}
-      - 8
-      - 8
+      - 16
+      - 16
       - 1
     activation_functions:
       _target_: models.get_tanh

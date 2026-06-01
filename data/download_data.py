@@ -11,7 +11,6 @@ from pathlib import Path
 import hydra
 from omegaconf import DictConfig
 from huggingface_hub import hf_hub_download
-from hydra.utils import to_absolute_path
 
 REPO_ID = "polymathic-ai/turbulent_radiative_layer_2D"
 
@@ -35,9 +34,7 @@ def download(tcool: str) -> str:
 @hydra.main(version_base="1.3", config_path="../config", config_name="config")
 def main(cfg: DictConfig):
     tcool = cfg.preprocessing.data.tcool
-    trajectory = cfg.preprocessing.data.trajectory
-    
-    print(f"Targeting tcool: {tcool}, trajectory: {trajectory}")
+    print(f"Targeting tcool: {tcool}")
     download(tcool)
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-epochs: 100
+epochs: 4000
 batch_size: 1024
 learning_rate: 1.0e-3
 in_memory: true
@@ -21,6 +21,6 @@ early_stopping:
 
 early_stopping_metric: RRMSE
 
-checkpointing_frequency: 20
+checkpointing_frequency: 100
 
 resume_from_checkpoint: null

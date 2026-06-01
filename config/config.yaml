@@ -4,6 +4,9 @@ hydra:
     chdir: true
   run:
     dir: results/runs_${problem_name}/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  sweep:
+    dir: results/multiruns_${problem_name}/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${hydra.job.num}
 
 dataset_root: ${hydra:runtime.cwd}/datasets
 use_wandb: false

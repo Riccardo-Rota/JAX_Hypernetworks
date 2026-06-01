@@ -20,12 +20,12 @@ train:
 
 val:
   <<: *base_toy
-  N: 200
-  n_realizations: 10
+  N: ${int_product:${data_source.train.N},0.2}
+  n_realizations: ${data_source.train.n_realizations}
   seed: ${sum:[${seed},1]}
 
 test:
   <<: *base_toy
-  N: 200
-  n_realizations: 10
+  N: ${int_product:${data_source.train.N},0.2}
+  n_realizations: ${data_source.train.n_realizations}
   seed: ${sum:[${seed},2]}

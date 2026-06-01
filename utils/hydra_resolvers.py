@@ -31,3 +31,4 @@ def register_resolvers():
     OmegaConf.register_new_resolver("as_tuple", as_tuple)
     OmegaConf.register_new_resolver("len", len)
     OmegaConf.register_new_resolver("ho_func", resolve_higher_order)
+    OmegaConf.register_new_resolver("int_product", lambda x, y: int(x * y))

@@ -41,8 +41,8 @@ target_block:
     w0_other: 30.0
     num_neurons:
       - ${len:${data_source.base_toy.var_domains}}
-      - 8
-      - 8
+      - 16
+      - 16
       - 1
     rngs:
       _target_: flax.nnx.Rngs
