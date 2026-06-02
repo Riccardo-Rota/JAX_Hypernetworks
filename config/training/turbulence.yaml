@@ -1,4 +1,4 @@
-epochs: 50
+epochs: 300
 batch_size: 4096
 learning_rate: 1.0e-3
 in_memory: true
@@ -17,7 +17,7 @@ metrics:
 
 early_stopping:
   _target_: flax.training.early_stopping.EarlyStopping
-  patience: 200
+  patience: 60
 
 early_stopping_metric: RRMSE
 

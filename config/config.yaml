@@ -13,7 +13,7 @@ use_wandb: false
 
 defaults:
   - optimizer: adam_cosine_onecycle
-  - problem: toy            # Controller for consistency across configs: it can be toy or turbulence and realtes to data_source and postprocessing.
+  - problem: turbulence            # Controller for consistency across configs: it can be toy or turbulence and realtes to data_source and postprocessing.
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
   - _self_
