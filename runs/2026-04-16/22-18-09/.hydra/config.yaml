@@ -1,0 +1,179 @@
+training:
+  epochs: 20
+  batch_size: 1024
+  learning_rate: 0.001
+  in_memory: true
+  criterion:
+    _target_: losses.L2Loss
+  metrics:
+    RRMSE:
+      _target_: metrics.RRMSE
+    MAE:
+      _target_: metrics.MAE
+    RMSE:
+      _target_: metrics.RMSE
+  early_stopping:
+    _target_: training.EarlyStopping
+    patience: 500
+    min_delta: 1.0e-08
+  early_stopping_metric: RRMSE
+optimizer:
+  _target_: flax.nnx.Optimizer
+  tx:
+    _target_: optax.adam
+    learning_rate:
+      _target_: optax.schedules.cosine_onecycle_schedule
+      peak_value: ${training.learning_rate}
+      pct_start: 0.1
+      div_factor: 25.0
+      final_div_factor: 10000.0
+      transition_steps: ${compute_train_steps:${training.epochs}, ${runtime.N}, ${training.batch_size}}
+data_source:
+  base_toy:
+    _target_: data.ToyDataSource
+    f:
+      _target_: utils.get_function_from_string
+      f_string: theta[0]*x[0] + exp(-theta[1]*x[0]) + sin(theta[2]*pi*x[0])
+    hyper_domains:
+    - - -2
+      - 2
+    - - 0
+      - 1
+    - - -2
+      - 2
+    var_domains:
+    - - -1
+      - 1
+  train:
+    _target_: data.ToyDataSource
+    f:
+      _target_: utils.get_function_from_string
+      f_string: theta[0]*x[0] + exp(-theta[1]*x[0]) + sin(theta[2]*pi*x[0])
+    hyper_domains:
+    - - -2
+      - 2
+    - - 0
+      - 1
+    - - -2
+      - 2
+    var_domains:
+    - - -1
+      - 1
+    'N': 1000
+    n_realizations: 10
+    seed: ${seed}
+  val:
+    _target_: data.ToyDataSource
+    f:
+      _target_: utils.get_function_from_string
+      f_string: theta[0]*x[0] + exp(-theta[1]*x[0]) + sin(theta[2]*pi*x[0])
+    hyper_domains:
+    - - -2
+      - 2
+    - - 0
+      - 1
+    - - -2
+      - 2
+    var_domains:
+    - - -1
+      - 1
+    'N': 200
+    n_realizations: 10
+    seed: ${sum:[${seed},1]}
+  test:
+    _target_: data.ToyDataSource
+    f:
+      _target_: utils.get_function_from_string
+      f_string: theta[0]*x[0] + exp(-theta[1]*x[0]) + sin(theta[2]*pi*x[0])
+    hyper_domains:
+    - - -2
+      - 2
+    - - 0
+      - 1
+    - - -2
+      - 2
+    var_domains:
+    - - -1
+      - 1
+    'N': 200
+    n_realizations: 10
+    seed: ${sum:[${seed},2]}
+postprocessing:
+  loss_plots:
+    loss_linear:
+      _target_: postprocessing.plot_loss_curves
+    loss_semilogx:
+      _target_: postprocessing.plot_loss_curves
+      logx: true
+    loss_loglog:
+      _target_: postprocessing.plot_loss_curves
+      logx: true
+      logy: true
+  output_plots:
+    predictions:
+      _target_: postprocessing.plot_predictions_legacy
+      N_examples: 4
+      f_to_learn: ${data_source.train.f.f_string}
+      hypernetwork: ${hypernetwork}
+      targetnetwork: ${targetnetwork}
+      mu_domain: ${data_source.train.hyper_domains[0]}
+      l_domain: ${data_source.train.hyper_domains[1]}
+      k_domain: ${data_source.train.hyper_domains[2]}
+model:
+  hyper_block:
+    _target_: models.Hypernetwork
+    network:
+      _target_: models.MLP
+      num_neurons:
+      - 3
+      - 64
+      - 64
+      - 128
+      activation_functions:
+        _target_: models.get_tanh
+      rngs:
+        _target_: flax.nnx.Rngs
+        default: ${seed}
+    input: hypervars
+    output: latent_features
+  proj_block:
+    _target_: models.ProjectionHead
+    in_features: 128
+    input: latent_features
+    output: weights
+    kernel_init:
+      _target_: flax.nnx.initializers.lecun_normal
+    bias_init:
+      _target_: flax.nnx.initializers.zeros_init
+    rngs:
+      _target_: flax.nnx.Rngs
+      params: 42
+  target_block:
+    _target_: models.TargetNetwork
+    network:
+      _target_: models.MLP
+      num_neurons:
+      - 1
+      - 8
+      - 8
+      - 1
+      activation_functions:
+        _target_: models.get_tanh
+      rngs:
+        _target_: flax.nnx.Rngs
+        default: ${seed}
+      replace_weights: true
+    input: vars
+    weights:
+      all: weights
+    output: final_output
+  manager:
+    _target_: models.HypernetworkManager
+    blocks:
+    - ${model.target_block}
+    - ${model.proj_block}
+    - ${model.hyper_block}
+    output: final_output
+seed: 0
+runtime:
+  'N': ???

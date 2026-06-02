@@ -1,5 +1,9 @@
 # model/toy_siren_naive.yaml
 
+num_variables: ${len:${data_source.base_toy.var_domains}}
+num_hypervariables: ${len:${data_source.base_toy.hyper_domains}}
+num_output_variables: 1
+
 # HYPERNETWORK
 hyper_block:
   _target_: models.Hypernetwork
@@ -7,7 +11,7 @@ hyper_block:
   network:
     _target_: models.MLP
     num_neurons:
-      - ${len:${data_source.base_toy.hyper_domains}}
+      - ${model.num_hypervariables}
       - 64
       - 64
       - 128
@@ -40,10 +44,10 @@ target_block:
     w0_last: 30.0
     w0_other: 30.0
     num_neurons:
-      - ${len:${data_source.base_toy.var_domains}}
+      - ${model.num_variables}
       - 16
       - 16
-      - 1
+      - ${model.num_output_variables}
     rngs:
       _target_: flax.nnx.Rngs
       default: ${seed}

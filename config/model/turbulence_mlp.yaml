@@ -1,3 +1,8 @@
+
+num_variables: ${len:${data_source.base_dataset.var_keys}}
+num_hypervariables: ${len:${data_source.base_dataset.hypervar_keys}}
+num_output_variables: ${len:${data_source.base_dataset.target_keys}}
+
 # HYPERNETWORK
 hyper_block:
   _target_: models.Hypernetwork
@@ -5,7 +10,7 @@ hyper_block:
   network:
     _target_: models.MLP
     num_neurons:
-      - ${len:${data_source.base_dataset.hypervar_keys}}
+      - ${model.num_hypervariables}
       - 64
       - 64
       - 128
@@ -39,10 +44,10 @@ target_block:
   network:
     _target_: models.MLP
     num_neurons:
-      - ${len:${data_source.base_dataset.var_keys}}
+      - ${model.num_variables}
       - 8
       - 8
-      - ${len:${data_source.base_dataset.target_keys}}
+      - ${model.num_output_variables}
     activation_functions:
       _target_: models.get_tanh
     rngs:

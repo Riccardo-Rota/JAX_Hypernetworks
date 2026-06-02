@@ -1,0 +1,382 @@
+_wandb:
+    value:
+        cli_version: 0.27.0
+        e:
+            s15i1jiv8ycq2c1w4mbleh8h2zbaxul4:
+                codePath: mainhydra.py
+                cpu_count: 4
+                cpu_count_logical: 8
+                disk:
+                    /:
+                        total: "1081101176832"
+                        used: "57287225344"
+                email: riky.rota@gmail.com
+                executable: /home/riccardorota/PACS/PACSenv/bin/python
+                git:
+                    commit: 30f3d2320e895dc3cbb73aba4a86a556420bc524
+                    remote: git@github.com:Riccardo-Rota/JAX_Hypernetworks.git
+                host: LAPTOP-5J6QLG1C
+                memory:
+                    total: "3972124672"
+                os: Linux-6.6.114.1-microsoft-standard-WSL2-x86_64-with-glibc2.35
+                program: /home/riccardorota/PACS/PACSproject/mainhydra.py
+                python: CPython 3.12.11
+                root: /home/riccardorota/PACS/PACSproject/runs_toy/2026-05-21/22-47-19
+                startedAt: "2026-05-21T20:47:21.548855Z"
+                writerId: s15i1jiv8ycq2c1w4mbleh8h2zbaxul4
+        m: []
+        python_version: 3.12.11
+        t:
+            "1":
+                - 12
+                - 45
+                - 50
+            "2":
+                - 12
+                - 45
+                - 50
+            "3":
+                - 2
+                - 15
+                - 16
+                - 61
+                - 62
+            "4": 3.12.11
+            "5": 0.27.0
+            "12": 0.27.0
+            "13": linux-x86_64
+data_source:
+    value:
+        base_toy:
+            _target_: data.ToyDataSource
+            f:
+                _target_: utils.get_function_from_string
+                f_string: theta[0]*x[0] + exp(-theta[1]*x[0]) + sin(theta[2]*pi*x[0])
+            hyper_domains:
+                - - -2
+                  - 2
+                - - 0
+                  - 1
+                - - -2
+                  - 2
+            var_domains:
+                - - -1
+                  - 1
+        test:
+            _target_: data.ToyDataSource
+            "N": 200
+            f:
+                _target_: utils.get_function_from_string
+                f_string: theta[0]*x[0] + exp(-theta[1]*x[0]) + sin(theta[2]*pi*x[0])
+            hyper_domains:
+                - - -2
+                  - 2
+                - - 0
+                  - 1
+                - - -2
+                  - 2
+            n_realizations: 10
+            seed: 2
+            var_domains:
+                - - -1
+                  - 1
+        train:
+            _target_: data.ToyDataSource
+            "N": 1000
+            f:
+                _target_: utils.get_function_from_string
+                f_string: theta[0]*x[0] + exp(-theta[1]*x[0]) + sin(theta[2]*pi*x[0])
+            hyper_domains:
+                - - -2
+                  - 2
+                - - 0
+                  - 1
+                - - -2
+                  - 2
+            n_realizations: 10
+            seed: 0
+            var_domains:
+                - - -1
+                  - 1
+        val:
+            _target_: data.ToyDataSource
+            "N": 200
+            f:
+                _target_: utils.get_function_from_string
+                f_string: theta[0]*x[0] + exp(-theta[1]*x[0]) + sin(theta[2]*pi*x[0])
+            hyper_domains:
+                - - -2
+                  - 2
+                - - 0
+                  - 1
+                - - -2
+                  - 2
+            n_realizations: 10
+            seed: 1
+            var_domains:
+                - - -1
+                  - 1
+dataset_root:
+    value: /home/riccardorota/PACS/PACSproject/datasets
+model:
+    value:
+        hyper_block:
+            _target_: models.Hypernetwork
+            input: hypervars
+            network:
+                _target_: models.MLP
+                activation_functions:
+                    _target_: models.get_tanh
+                num_neurons:
+                    - 3
+                    - 64
+                    - 64
+                    - 128
+                rngs:
+                    _target_: flax.nnx.Rngs
+                    default: 0
+            output: latent_features
+        manager:
+            _target_: models.HypernetworkManager
+            blocks:
+                - _target_: models.TargetNetwork
+                  input: vars
+                  network:
+                    _target_: models.Siren
+                    num_neurons:
+                        - 1
+                        - 8
+                    rngs:
+                        _target_: flax.nnx.Rngs
+                        default: 0
+                    w0_first: 30
+                    w0_last: 30
+                    w0_other: 30
+                  output: first_layer_output
+                  weights_mapping:
+                    bias: first_layer_biases
+                    kernel: weights_first_kernel
+                - _target_: models.TargetNetwork
+                  input: first_layer_output
+                  network:
+                    _target_: models.Siren
+                    num_neurons:
+                        - 8
+                        - 8
+                        - 1
+                    rngs:
+                        _target_: flax.nnx.Rngs
+                        default: 0
+                    w0_first: 30
+                    w0_last: 30
+                    w0_other: 30
+                  output: final_output
+                  weights_mapping:
+                    bias: other_layer_biases
+                    kernel: weights_other_kernels
+                - _target_: models.SirenHead
+                  in_features: 128
+                  input: latent_features
+                  mode: kernel
+                  output: weights_first_kernel
+                  rngs:
+                    _target_: flax.nnx.Rngs
+                    params: 42
+                  siren_in_features: 1
+                - _target_: models.SirenHead
+                  in_features: 128
+                  input: latent_features
+                  mode: kernel
+                  output: weights_other_kernels
+                  rngs:
+                    _target_: flax.nnx.Rngs
+                    params: 42
+                  siren_in_features: 1
+                - _target_: models.SirenHead
+                  in_features: 128
+                  input: latent_features
+                  mode: bias
+                  output: first_layer_biases
+                  rngs:
+                    _target_: flax.nnx.Rngs
+                    params: 42
+                  siren_in_features: 1
+                - _target_: models.SirenHead
+                  in_features: 128
+                  input: latent_features
+                  mode: bias
+                  output: other_layer_biases
+                  rngs:
+                    _target_: flax.nnx.Rngs
+                    params: 42
+                  siren_in_features: 1
+                - _target_: models.Hypernetwork
+                  input: hypervars
+                  network:
+                    _target_: models.MLP
+                    activation_functions:
+                        _target_: models.get_tanh
+                    num_neurons:
+                        - 3
+                        - 64
+                        - 64
+                        - 128
+                    rngs:
+                        _target_: flax.nnx.Rngs
+                        default: 0
+                  output: latent_features
+            output: final_output
+        proj_block_first_biases:
+            _target_: models.SirenHead
+            in_features: 128
+            input: latent_features
+            mode: bias
+            output: first_layer_biases
+            rngs:
+                _target_: flax.nnx.Rngs
+                params: 42
+            siren_in_features: 1
+        proj_block_first_kernel:
+            _target_: models.SirenHead
+            in_features: 128
+            input: latent_features
+            mode: kernel
+            output: weights_first_kernel
+            rngs:
+                _target_: flax.nnx.Rngs
+                params: 42
+            siren_in_features: 1
+        proj_block_other_biases:
+            _target_: models.SirenHead
+            in_features: 128
+            input: latent_features
+            mode: bias
+            output: other_layer_biases
+            rngs:
+                _target_: flax.nnx.Rngs
+                params: 42
+            siren_in_features: 1
+        proj_block_other_kernels:
+            _target_: models.SirenHead
+            in_features: 128
+            input: latent_features
+            mode: kernel
+            output: weights_other_kernels
+            rngs:
+                _target_: flax.nnx.Rngs
+                params: 42
+            siren_in_features: 1
+        target_first_layer:
+            _target_: models.TargetNetwork
+            input: vars
+            network:
+                _target_: models.Siren
+                num_neurons:
+                    - 1
+                    - 8
+                rngs:
+                    _target_: flax.nnx.Rngs
+                    default: 0
+                w0_first: 30
+                w0_last: 30
+                w0_other: 30
+            output: first_layer_output
+            weights_mapping:
+                bias: first_layer_biases
+                kernel: weights_first_kernel
+        target_other_layers:
+            _target_: models.TargetNetwork
+            input: first_layer_output
+            network:
+                _target_: models.Siren
+                num_neurons:
+                    - 8
+                    - 8
+                    - 1
+                rngs:
+                    _target_: flax.nnx.Rngs
+                    default: 0
+                w0_first: 30
+                w0_last: 30
+                w0_other: 30
+            output: final_output
+            weights_mapping:
+                bias: other_layer_biases
+                kernel: weights_other_kernels
+optimizer:
+    value:
+        _target_: flax.nnx.Optimizer
+        tx:
+            _target_: optax._src.alias.adam
+            learning_rate:
+                _target_: optax.schedules.cosine_onecycle_schedule
+                div_factor: 25
+                final_div_factor: 10000
+                pct_start: 0.1
+                peak_value: 0.001
+                transition_steps: 100
+postprocessing:
+    value:
+        loss_plots:
+            loss_linear:
+                _target_: postprocessing.plot_loss_curves
+            loss_loglog:
+                _target_: postprocessing.plot_loss_curves
+                logx: true
+                logy: true
+            loss_semilogx:
+                _target_: postprocessing.plot_loss_curves
+                logx: true
+        output_plots:
+            default_predictions:
+                _target_: postprocessing.generate_toy_plots
+                exact_function:
+                    _target_: utils.get_function_from_string
+                    f_string: theta[0]*x[0] + exp(-theta[1]*x[0]) + sin(theta[2]*pi*x[0])
+                hypervars_set:
+                    - - 0.5
+                      - 0.5
+                      - 0.5
+                    - - 1
+                      - 0.5
+                      - 1
+                    - - -1
+                      - 0.5
+                      - -1
+                    - - -0.5
+                      - 1
+                      - 2
+                n_points: 400
+                var_domains:
+                    - - -1
+                      - 1
+problem_name:
+    value: toy
+runtime:
+    value:
+        "N": 1000
+seed:
+    value: 0
+training:
+    value:
+        batch_size: 1024
+        checkpointing_frequency: 20
+        criterion:
+            _target_: losses.L2Loss
+        early_stopping:
+            _target_: flax.training.early_stopping.EarlyStopping
+            patience: 500
+        early_stopping_metric: RRMSE
+        epochs: 100
+        in_memory: true
+        learning_rate: 0.001
+        metrics:
+            MAE:
+                _target_: metrics.MAE
+            RMSE:
+                _target_: metrics.RMSE
+            RRMSE:
+                _target_: metrics.RRMSE
+        resume_from_checkpoint: null
+use_wandb:
+    value: true

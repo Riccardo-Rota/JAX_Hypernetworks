@@ -1,4 +1,7 @@
-# model/toy.yaml
+
+num_variables: ${len:${data_source.base_dataset.var_keys}}
+num_hypervariables: ${len:${data_source.base_dataset.hypervar_keys}}
+num_output_variables: ${len:${data_source.base_dataset.target_keys}}
 
 # HYPERNETWORK
 hyper_block:
@@ -7,7 +10,7 @@ hyper_block:
   network:
     _target_: models.MLP
     num_neurons:
-      - ${len:${data_source.base_dataset.hypervar_keys}}
+      - ${model.num_hypervariables}
       - 64
       - 64
       - 128
@@ -27,7 +30,7 @@ proj_block_first_kernel:
   input: latent_features
   output: weights_first_kernel
   mode: kernel
-  siren_in_features: 1
+  siren_in_features: ${model.num_variables} 
   rngs:
     _target_: flax.nnx.Rngs
     params: 42
@@ -39,7 +42,7 @@ proj_block_other_kernels:
   input: latent_features
   output: weights_other_kernels
   mode: kernel
-  siren_in_features: 1
+  siren_in_features: ${model.num_variables}
   rngs:
     _target_: flax.nnx.Rngs
     params: 42
@@ -51,7 +54,7 @@ proj_block_first_biases:
   input: latent_features
   output: first_layer_biases
   mode: bias
-  siren_in_features: 1
+  siren_in_features: ${model.num_variables}
   rngs:
     _target_: flax.nnx.Rngs
     params: 42
@@ -63,7 +66,7 @@ proj_block_other_biases:
   input: latent_features
   output: other_layer_biases
   mode: bias
-  siren_in_features: 1
+  siren_in_features: ${model.num_variables}
   rngs:
     _target_: flax.nnx.Rngs
     params: 42
@@ -77,7 +80,9 @@ target_first_layer:
     w0_first: 30.0
     w0_last: 30.0
     w0_other: 30.0
-    num_neurons: [1, 8]
+    num_neurons:
+      - ${model.num_variables}
+      - 8
     rngs:
       _target_: flax.nnx.Rngs
       default: ${seed}
@@ -96,7 +101,10 @@ target_other_layers:
     w0_first: 30.0
     w0_last: 30.0
     w0_other: 30.0
-    num_neurons: [8, 8, 1]
+    num_neurons:
+      - 8
+      - 8
+      - ${model.num_output_variables}
     rngs:
       _target_: flax.nnx.Rngs
       default: ${seed}
