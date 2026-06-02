@@ -1,3 +1,5 @@
+# model/toy.yaml
+
 # HYPERNETWORK
 hyper_block:
   _target_: models.Hypernetwork
@@ -18,47 +20,103 @@ hyper_block:
   input: hypervars
   output: latent_features
 
-# PROJECTION HEAD
-proj_block:
-  _target_: models.ProjectionHead
+# PROJECTION HEAD FOR FIRST KERNEL
+proj_block_first_kernel:
+  _target_: models.SirenHead
   in_features: 128
   input: latent_features
-  output: weights
-  kernel_init:
-    _target_: flax.nnx.initializers.lecun_normal
-  bias_init:
-    _target_: flax.nnx.initializers.zeros_init
+  output: weights_first_kernel
+  mode: kernel
+  siren_in_features: 1
   rngs:
     _target_: flax.nnx.Rngs
-    default: ${seed}
+    params: 42
+
+# PROJECTION HEAD FOR OTHER KERNELS
+proj_block_other_kernels:
+  _target_: models.SirenHead
+  in_features: 128
+  input: latent_features
+  output: weights_other_kernels
+  mode: kernel
+  siren_in_features: 1
+  rngs:
+    _target_: flax.nnx.Rngs
+    params: 42
+
+# PROJECTION HEAD FOR FIRST LAYER BIASES
+proj_block_first_biases:
+  _target_: models.SirenHead
+  in_features: 128
+  input: latent_features
+  output: first_layer_biases
+  mode: bias
+  siren_in_features: 1
+  rngs:
+    _target_: flax.nnx.Rngs
+    params: 42
+
+# PROJECTION HEAD FOR OTHER LAYER BIASES
+proj_block_other_biases:
+  _target_: models.SirenHead
+  in_features: 128
+  input: latent_features
+  output: other_layer_biases
+  mode: bias
+  siren_in_features: 1
+  rngs:
+    _target_: flax.nnx.Rngs
+    params: 42
 
 # TARGET NETWORK
-target_block:
+target_first_layer:
   _target_: models.TargetNetwork
+  
   network:
     _target_: models.Siren
     w0_first: 30.0
     w0_last: 30.0
     w0_other: 30.0
-    num_neurons:
-      - ${len:${data_source.base_dataset.var_keys}}
-      - 16
-      - 16
-      - ${len:${data_source.base_dataset.target_keys}}
+    num_neurons: [1, 8]
     rngs:
       _target_: flax.nnx.Rngs
       default: ${seed}
 
   input: vars
   weights_mapping:
-    all: weights
+    bias: first_layer_biases
+    kernel: weights_first_kernel
+  output: first_layer_output
+
+target_other_layers:
+  _target_: models.TargetNetwork
+  
+  network:
+    _target_: models.Siren
+    w0_first: 30.0
+    w0_last: 30.0
+    w0_other: 30.0
+    num_neurons: [8, 8, 1]
+    rngs:
+      _target_: flax.nnx.Rngs
+      default: ${seed}
+
+  input: first_layer_output
+  weights_mapping:
+    bias: other_layer_biases
+    kernel: weights_other_kernels
   output: final_output
 
 # HYPERNETWORK MANAGER
 manager:
   _target_: models.HypernetworkManager
   blocks:
-    - ${model.target_block}
-    - ${model.proj_block}
+    - ${model.target_first_layer}
+    - ${model.target_other_layers}
+    - ${model.proj_block_first_kernel}
+    - ${model.proj_block_other_kernels}
+    - ${model.proj_block_first_biases}
+    - ${model.proj_block_other_biases}
     - ${model.hyper_block}
+
   output: final_output
