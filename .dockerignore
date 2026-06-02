@@ -21,6 +21,7 @@ __pycache__/
 
 # Output files & datasets
 results/
+results_cluster/
 *.tar
 CLUSTER_TUTORIAL.md
 DOCKER_TUTORIAL.md

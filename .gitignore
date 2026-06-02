@@ -6,6 +6,7 @@ __pycache__/
 # Personalized Hydra output folders
 frontend/
 results/
+results_cluster/
 my-checkpoints/
 chceckpoints/
 
