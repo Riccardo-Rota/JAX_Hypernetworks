@@ -18,11 +18,11 @@ Each output row is float32: [time, x, y, density, pressure, vel_x, vel_y]
 from pathlib import Path
 
 import h5py
-import hydra
 import numpy as np
 from omegaconf import DictConfig
 import shutil
-
+import sys
+from hydra import initialize, compose
 
 # Anchor everything to the project root; identical behaviour on any OS,
 # regardless of the user's current working directory.
@@ -179,33 +179,36 @@ def cleanup_raw_download():
             print(f"==> Removed {path}")
 
 
-@hydra.main(version_base="1.3", config_path="../config", config_name="config")
-def main(cfg: DictConfig):
-    tcool = cfg.preprocessing.data.tcool
-    master_hdf5_path = (
-        DATASETS_DIR
-        / f"data/train/turbulent_radiative_layer_tcool_{float(tcool):.2f}.hdf5"
-    )
+def main():
+    overrides = sys.argv[1:]
+    with initialize(version_base="1.3", config_path="../config"):
+        cfg = compose(config_name="config", overrides=overrides)
 
-    if not master_hdf5_path.exists():
-        raise FileNotFoundError(
-            f"Master HDF5 file not found: {master_hdf5_path}\n"
-            f"  Run `python data/download_data.py` first "
-            f"(or with `data.tcool={tcool}` to download the right file)."
+        tcool = cfg.preprocessing.data.tcool
+        master_hdf5_path = (
+            DATASETS_DIR
+            / f"data/train/turbulent_radiative_layer_tcool_{float(tcool):.2f}.hdf5"
         )
 
-    prepare_datasets(
-        master_hdf5_path=str(master_hdf5_path),
-        base_name=cfg.preprocessing.data.base_name,
-        trajectory_index=cfg.preprocessing.data.trajectory,
-        chunk_size=cfg.preprocessing.data.chunk_size,
-        train_ratio=cfg.preprocessing.data.train_ratio,
-        val_ratio=cfg.preprocessing.data.val_ratio,
-        test_ratio=cfg.preprocessing.data.test_ratio,
-        seed=cfg.preprocessing.data.seed,
-    )
+        if not master_hdf5_path.exists():
+            raise FileNotFoundError(
+                f"Master HDF5 file not found: {master_hdf5_path}\n"
+                f"  Run `python data/download_data.py` first "
+                f"(or with `data.tcool={tcool}` to download the right file)."
+            )
 
-    cleanup_raw_download()
+        prepare_datasets(
+            master_hdf5_path=str(master_hdf5_path),
+            base_name=cfg.preprocessing.data.base_name,
+            trajectory_index=cfg.preprocessing.data.trajectory,
+            chunk_size=cfg.preprocessing.data.chunk_size,
+            train_ratio=cfg.preprocessing.data.train_ratio,
+            val_ratio=cfg.preprocessing.data.val_ratio,
+            test_ratio=cfg.preprocessing.data.test_ratio,
+            seed=cfg.preprocessing.data.seed,
+        )
+
+        cleanup_raw_download()
 
 
 if __name__ == "__main__":

@@ -20,12 +20,6 @@ def plot_loss_curves(train_history: List[dict], val_history: List[dict], save_pa
         loss_key (Optional[str]): Key in the train_results and val_results dicts to use for plotting. If None, it will use the first key found in the dicts. Default: None.
     """
 
-    # Setup directories
-    directory = Path("figures")
-    directory.mkdir(parents=True, exist_ok=True)
-    base_name = "loss_curve"
-    extension = ".png"
-
     if not logx:
         plotter = plt.plot if not logy else plt.semilogy
     else:
@@ -41,9 +35,8 @@ def plot_loss_curves(train_history: List[dict], val_history: List[dict], save_pa
     plt.ylabel(loss_key)
     plt.legend()
 
-    unique_save_path = directory / f"{base_name}_{extension}"
-    plt.savefig(unique_save_path, bbox_inches='tight')
-    plt.savefig(save_path)
+    Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(save_path, bbox_inches='tight')
 
     plt.close()
 
@@ -260,9 +253,11 @@ def plot_2d_hdf5_comparison(
     file_path: str,
     schema: Dict[str, int],
     target_keys: Sequence[str],
+    var_keys: Sequence[str],
     num_plots: Optional[int] = None,
     dataset_key: Optional[str] = None,
-    time_tolerance: float = 1e-5
+    time_tolerance: float = 1e-5,
+    var_bounds: Optional[List[Tuple[float, float]]] = None
 ):
     """
     Evaluates a hypernetwork against ground-truth data from an HDF5 file.
@@ -274,9 +269,12 @@ def plot_2d_hdf5_comparison(
         schema (Dict[str, int]): Mapping from variable names to HDF5 column indices.
         target_keys (Sequence[str]): Ordered list of target variables expected from the model 
             (e.g., ["density", "pressure"]).
+        var_keys (Sequence[str]): Ordered list of spatial/input variables (e.g., ["x", "y"]).
         num_plots (Optional[int], optional): Number of distinct time points to plot.
         dataset_key (Optional[str], optional): The HDF5 internal key. Defaults to first available.
         time_tolerance (float, optional): Tolerance for floating-point time matching.
+        var_bounds (Optional[List[Tuple[float, float]]], optional): A list of (min, max) tuples 
+            to filter the spatial variables. If provided, the plot will only show data within these bounds.
     """
     required_keys = ["time", "x", "y"]
     for req in required_keys:
@@ -295,6 +293,19 @@ def plot_2d_hdf5_comparison(
         if dataset_key is None:
             dataset_key = list(f.keys())[0]
         data = f[dataset_key][:]
+
+    # If var_bounds are provided, filter the data before plotting
+    if var_bounds:
+        if len(var_bounds) != len(var_keys):
+            raise ValueError(
+                f"Mismatch between `var_bounds` ({len(var_bounds)}) and `var_keys` ({len(var_keys)})."
+            )
+        var_indices = [schema[key] for key in var_keys]
+        vars_data = data[:, var_indices]
+        mask = np.ones(len(data), dtype=bool)
+        for i, (low, high) in enumerate(var_bounds):
+            mask &= (vars_data[:, i] >= low) & (vars_data[:, i] <= high)
+        data = data[mask]
 
     time_column = data[:, schema["time"]]
 

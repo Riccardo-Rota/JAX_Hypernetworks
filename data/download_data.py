@@ -8,8 +8,9 @@ We do NOT use the HF train/valid/test split — we'll re-split ourselves
 along the time axis in preprocessing.py.
 """
 from pathlib import Path
-import hydra
+import sys
 from omegaconf import DictConfig
+from hydra import initialize, compose
 from huggingface_hub import hf_hub_download
 
 REPO_ID = "polymathic-ai/turbulent_radiative_layer_2D"
@@ -31,11 +32,16 @@ def download(tcool: str) -> str:
     )
     print(f"Downloaded: {path}")
 
-@hydra.main(version_base="1.3", config_path="../config", config_name="config")
-def main(cfg: DictConfig):
-    tcool = cfg.preprocessing.data.tcool
-    print(f"Targeting tcool: {tcool}")
-    download(tcool)
+def main():
+    # Hydra's Composition API doesn't automatically parse sys.argv, so we pass them manually.
+    overrides = sys.argv[1:]
+
+    # Use the Composition API to load config without creating an output directory.
+    with initialize(version_base="1.3", config_path="../config"):
+        cfg = compose(config_name="config", overrides=overrides)
+        tcool = cfg.preprocessing.data.tcool
+        print(f"Targeting tcool: {tcool}")
+        download(tcool)
 
 if __name__ == "__main__":
     main()

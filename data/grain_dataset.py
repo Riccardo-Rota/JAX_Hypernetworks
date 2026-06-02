@@ -15,10 +15,11 @@ class InMemoryHDF5Source(grain.RandomAccessDataSource):
         hypervar_keys: Sequence[str],
         var_keys: Sequence[str],
         target_keys: Sequence[str],
-        dataset_key: str = 'data'
+        dataset_key: str = 'data',
+        var_bounds: List[Tuple[float, float]] = None
     ):
         with h5py.File(hdf5_path, 'r') as f:
-            self._data = f[dataset_key][:] # Load entirely into memory
+            data = f[dataset_key][:] # Load entirely into memory
 
         try:
             self.hypervar_indices = np.array([schema[key] for key in hypervar_keys], dtype=int)
@@ -26,6 +27,18 @@ class InMemoryHDF5Source(grain.RandomAccessDataSource):
             self.target_indices = np.array([schema[key] for key in target_keys], dtype=int)
         except KeyError as e:
             raise ValueError(f"Key {e} not found in schema. Available keys: {list(schema.keys())}")
+    
+        # If required, rescrict variable domains
+        if var_bounds is not None:
+            vars_data = data[:, self.var_indices]
+            mask = np.ones(len(data), dtype=bool)
+            
+            for i, (low, high) in enumerate(var_bounds):
+                mask &= (vars_data[:, i] >= low) & (vars_data[:, i] <= high)
+                
+            data = data[mask]
+
+        self._data = data
 
     def __len__(self):
         return len(self._data)

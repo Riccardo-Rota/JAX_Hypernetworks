@@ -17,3 +17,5 @@ output_plots:
     file_path: ${data_source.test.hdf5_path}
     schema: ${data_source.schema}
     target_keys: ${data_source.base_dataset.target_keys}
+    var_keys: ${data_source.base_dataset.var_keys}
+    var_bounds: ${data_source.base_dataset.var_bounds}

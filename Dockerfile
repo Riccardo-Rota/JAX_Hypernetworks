@@ -24,6 +24,7 @@ COPY models /app/models/
 COPY postprocessing /app/postprocessing/
 COPY training /app/training/
 COPY utils /app/utils/
+COPY datasets /app/datasets/
 
 # Add the project root to PYTHONPATH. This allows Python to find your modules.
 ENV PYTHONPATH="/app"

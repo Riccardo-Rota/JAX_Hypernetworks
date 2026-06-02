@@ -72,3 +72,8 @@ Now external user just needs to do:
 ```
     docker run --rm -v "$(pwd):/app" your_dockerhub_username/jax-hypernetworks:latest python main.py
 ```
+
+**NOTE**: if you run with docker, folders created belongs to root. When you later try to run it locally, you do not have permissions to create subfolders inside it (local user is different from Docker root user). Run following command to gain ownership.
+```
+    sudo chown -R $(whoami) results
+```
