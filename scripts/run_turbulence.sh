@@ -8,9 +8,18 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 # Define the image name. You MUST replace this placeholder before submitting.
 IMAGE_NAME="leonardobocchieri/jax-hypernetworks:latest"
 
+# Determine if GPU is available
+if command -v nvidia-smi &> /dev/null && nvidia-smi &> /dev/null; then
+    echo "[Hardware Profiler] NVIDIA GPU detected and drivers active. Enabling GPU acceleration."
+    GPU_FLAGS="--gpus all"
+else
+    echo "[Hardware Profiler] No active NVIDIA GPU found. Defaulting to CPU execution."
+    GPU_FLAGS=""
+fi
+
 echo "Starting container to run the Turbulence Problem..."
 
-docker run -it --rm --gpus all \
+docker run -it --rm $GPU_FLAGS \
   -v "$PROJECT_ROOT/config:/app/config" \
   -v "$PROJECT_ROOT/main.py:/app/main.py" \
   -v "$PROJECT_ROOT/results:/app/results" \
