@@ -5,22 +5,22 @@
 ```
     ssh username@10.78.18.100
 ```
-**NOTE**: username= u<codice persona>
+**NOTE**: username= u<codice persona> (e.g. u12345678 se codice persona 12345678)
 
 Enable the PBS commands (required on your first login or in a new shell):
 ```
     . /etc/profile.d/pbs.sh
 ```
 
-3. Clone repository inside work folder (not in home since we have more space in work)
+3. Create new ssh key inside cluster and add it to github
+
+4. Clone repository inside work folder (not in home since we have more space in work)
 ```
     cd /work/$(whoami)
     mkdir jax_project
     cd jax_project
     git clone ...
 ```
-**NOTE**: you need to generate new ssh key for cluster
-
 4. Use Appainter to pull Docker image hosted on Docker Hub
 Inside repository in cluster, run:
 ```
@@ -29,6 +29,9 @@ Inside repository in cluster, run:
 In this way Appainter creates a jax-hypernetworks.sif (converted HPC-compatible Docker Image)
 
 5. Create .pbs file:
+```
+    nano train.pbs
+```
 
 To run on CPU:
 ```
@@ -49,17 +52,15 @@ cd "$SCRATCH_DIR"
 
 # Copy your configuration, dataset, and entrypoint to the fast drive
 cp -r "$WORK_DIR/config" .
-cp -r "$WORK_DIR/dataset" .
 cp "$WORK_DIR/main.py" .
 mkdir results
 
 # Execute the container without GPU support (--nv is removed)
 apptainer exec \
   --bind $(pwd)/config:/app/config \
-  --bind $(pwd)/dataset:/app/dataset \
   --bind $(pwd)/results:/app/results \
   --bind $(pwd)/main.py:/app/main.py \
-  "$WORK_DIR/jax-hypernetworks.sif" bash -c "cd /app && python main.py"
+  "$WORK_DIR/jax-hypernetworks.sif" bash -c "cd /app && python main.py problem=turbulence"
 
 # Copy the generated results back to persistent storage before the node cleans itself
 cp -r results "$WORK_DIR/"
@@ -84,7 +85,6 @@ cd "$SCRATCH_DIR"
 
 # Copy your configuration, dataset, and entrypoint to the fast drive
 cp -r "$WORK_DIR/config" .
-cp -r "$WORK_DIR/dataset" .
 cp "$WORK_DIR/main.py" .
 mkdir results
 
@@ -93,10 +93,9 @@ mkdir results
 # --bind acts exactly like Docker's -v flag to map the wormholes.
 apptainer exec --nv \
   --bind $(pwd)/config:/app/config \
-  --bind $(pwd)/dataset:/app/dataset \
   --bind $(pwd)/results:/app/results \
   --bind $(pwd)/main.py:/app/main.py \
-  "$WORK_DIR/jax-hypernetworks.sif" bash -c "cd /app && python main.py"
+  "$WORK_DIR/jax-hypernetworks.sif" bash -c "cd /app && python main.py problem=turbulence"
 
 # Copy the generated results back to persistent storage before the node cleans itself
 cp -r results "$WORK_DIR/"
@@ -111,14 +110,18 @@ The cluster will return a job ID. You can monitor the status of your execution w
 ```
     qstat -u $(whoami)
 ```
+If you want to monitor refreshing every 2 seconds, run
+```
+    watch qstat -u $(whoami)
+```
+and then Ctr+C to exit window
 
-We can inspect in real time any output using
-```
-    tail -f jax_training.o*
-```
+**NOTE**: second to last column indicates State: Q for in coda, R for running, E for exiting. If you see nothing, job's finished
 
 7. Retrieve results on local machine:
 **NOTE**: Run outside cluster, in Ubuntu terminal
 ```
-    scp -r username@10.78.18.100:/work/username/jax_project/results ~/JAX_Hypernetworks/
+    scp -r username@10.78.18.100:/work/username/jax_project/JAX_Hypernetworks/results /path/to/your/local/folder
 ```
+
+where `/path/to/your/local/folder` is the local folder where to save everything
