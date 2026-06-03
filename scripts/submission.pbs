@@ -5,7 +5,7 @@
 
 set -e 
 
-WORK_DIR="/work/$USER/jax_project"
+WORK_DIR="$PBS_O_WORKDIR"
 SCRATCH_DIR="/scratch_local/$USER/$PBS_JOBID"
 
 
