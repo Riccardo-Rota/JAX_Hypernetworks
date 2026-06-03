@@ -1,11 +1,11 @@
 # HOW TO USE POLIMI CLUSTER
 
 1. Download VPN provider and connect (https://www.ict.polimi.it/network/vpn/)
-2. Connect to cluser and initialize. Open Ubuntu terminal and do:
+2. Connect to cluster and initialize. Open Ubuntu terminal and do:
 ```
     ssh username@10.78.18.100
 ```
-**NOTE**: username= u<codice persona> (e.g. u12345678 se codice persona 12345678)
+**NOTE**: username= u<codice persona> (e.g. u12345678 if codice persona 12345678)
 
 Enable the PBS commands (required on your first login or in a new shell):
 ```
@@ -21,14 +21,15 @@ Enable the PBS commands (required on your first login or in a new shell):
     cd jax_project
     git clone ...
 ```
-4. Use Appainter to pull Docker image hosted on Docker Hub
-Inside repository in cluster, run:
+5. Move inside the project directory and use Appainter to pull Docker image hosted on Docker Hub (this may take a few minutes)
+Run:
 ```
+    cd JAX_Hypernetworks
     apptainer pull jax-hypernetworks.sif docker://leonardobocchieri/jax-hypernetworks:latest
 ```
 In this way Appainter creates a jax-hypernetworks.sif (converted HPC-compatible Docker Image)
 
-5. Create .pbs file:
+6. Create .pbs file:
 ```
     nano train.pbs
 ```
@@ -116,7 +117,7 @@ If you want to monitor refreshing every 2 seconds, run
 ```
 and then Ctr+C to exit window
 
-**NOTE**: second to last column indicates State: Q for in coda, R for running, E for exiting. If you see nothing, job's finished
+**NOTE**: second to last column indicates State: Q for in queue, R for running, E for exiting. If you see nothing, job's finished
 
 7. Retrieve results on local machine:
 **NOTE**: Run outside cluster, in Ubuntu terminal

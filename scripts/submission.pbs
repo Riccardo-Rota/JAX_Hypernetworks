@@ -1,0 +1,34 @@
+#!/bin/bash
+#PBS -N jax_training
+#PBS -l walltime=12:00:00
+#PBS -joe
+
+set -e 
+
+WORK_DIR="/work/$USER/jax_project"
+SCRATCH_DIR="/scratch_local/$USER/$PBS_JOBID"
+
+
+# Data Rescue Trap (Executes on ANY exit)
+rescue_data() {
+    echo "[PBS Node] Job terminating. Rescuing data from scratch..."
+    # We use -p to create the directory if it doesn't exist, preventing cp errors
+    mkdir -p "$WORK_DIR/results"
+    # Safely copy contents back, ignoring errors if results is empty
+    cp -r "$SCRATCH_DIR/results/"* "$WORK_DIR/results/" 2>/dev/null || true
+    echo "[PBS Node] Rescue complete."
+}
+trap rescue_data EXIT
+
+# I/O Setup
+echo "[PBS Node] Setting up fast local scratch space..."
+mkdir -p "$SCRATCH_DIR"
+shopt -s dotglob
+cp -r "$WORK_DIR/"* "$SCRATCH_DIR/"
+shopt -u dotglob
+cd "$SCRATCH_DIR"
+mkdir -p results
+
+# Execution
+echo "[PBS Node] Launching execution..."
+ENGINE=apptainer USE_GPU=$USE_GPU bash scripts/run_experiment.sh $OVERRIDES

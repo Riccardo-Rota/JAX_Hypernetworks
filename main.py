@@ -56,7 +56,13 @@ def main(cfg: DictConfig) -> None:
             dir_problem = os.path.basename(os.path.dirname(os.path.dirname(run_path)))
             custom_name = f"{dir_problem}_{dir_day}_{dir_time}"
             config_dict = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
-            wandb.init(project="JaxHypernetworks", config=config_dict, dir=run_path, tags=["hydra-run"], name=custom_name)
+            project_name = cfg.wandb_settings.project
+            entity_name = cfg.wandb_settings.entity
+            try:
+                wandb.init(project=project_name, entity=entity_name, config=config_dict, dir=run_path, tags=["hydra-run"], name=custom_name)
+            except Exception as e:
+                print(f"Error initializing W&B: {e}")
+                use_wandb = False
 
         # Instantiate Models using Hydra
         model = hydra.utils.instantiate(cfg.model.manager)

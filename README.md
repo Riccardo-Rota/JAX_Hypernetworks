@@ -28,3 +28,36 @@ or
 2. Download Docker image:
     - open WSL terminal
     - Execute `docker pull leonardobocchieri/jax-hypernetworks:latest` (~4 GB download, it may take a few minutes)
+
+## Running locally with docker
+To run locally `main.py` with docker, execute `make run-local`. You can pass two extra arguments:
+- USE_GPU (true or false, default true, it falls back to CPU if GPU not available)
+- OVERRIDES (string containing all overrides to be added to hydra config. Alternatively, just modify config files in `config/`)
+Example: `make run-local USE_GPU=true OVERRIDES="problem=toy use_wandb=true training.epochs=100"`
+
+## Running on cluster with apptainer
+To run on cluster `main.py` with apptainer:
+- clone the repository in the cluster 
+- pull docker image with apptainer by executing `apptainer pull jax-hypernetworks.sif docker://leonardobocchieri/jax-hypernetworks:latest`
+- execute `make submit-cluster`. You can pass two extra arguments:
+    - USE_GPU (true or false, default true, decides which queue to put our job in)
+    - OVERRIDES (string containing all overrides to be added to hydra config. Alternatively, just modify config files in `config/`)
+  Example: `make submit-cluster USE_GPU=true OVERRIDES="problem=toy use_wandb=true training.epochs=100"`
+
+## Saving logs and checkpoints to Weights & Biases
+To connect the run to wandb for interactive live monitoring and logging, login to your wandb account online and generate an API key.
+Then, securely store it in a `~/.netrc` file in your home directory.
+
+To create and secure the file (the commands are identical for both your local terminal and the cluster login node), execute:
+```bash
+touch ~/.netrc
+chmod 600 ~/.netrc
+```
+
+Then, open the file in a text editor (e.g., `nano ~/.netrc`) and paste the following structure:
+```text
+machine api.wandb.ai
+  login user
+  password <your_API_key>
+```
+*(Note: Replace `<your_API_key>` with your actual 40-character Weights & Biases token. Do not change the word `user`).*

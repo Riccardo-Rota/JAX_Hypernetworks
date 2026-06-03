@@ -17,12 +17,23 @@ else
     GPU_FLAGS=""
 fi
 
+# Determine if a wandb API key is available in the environment
+WANDB_FLAGS=""
+if [ -n "$WANDB_API_KEY" ]; then
+    WANDB_FLAGS="-e WANDB_API_KEY"
+elif [ -f ~/.netrc ]; then
+    EXTRACTED_KEY=$(awk '/api.wandb.ai/{flag=1} flag && /password/{print $2; exit}' ~/.netrc)
+    if [ -n "$EXTRACTED_KEY" ]; then
+        WANDB_FLAGS="-e WANDB_API_KEY=$EXTRACTED_KEY"
+    fi
+fi
+
 echo "Starting container to run the Toy Problem..."
 
 docker run -it --rm $GPU_FLAGS \
   -v "$PROJECT_ROOT/config:/app/config" \
   -v "$PROJECT_ROOT/main.py:/app/main.py" \
   -v "$PROJECT_ROOT/results:/app/results" \
-  "$IMAGE_NAME" bash -c "python main.py problem=toy"
+  "$IMAGE_NAME" bash -c "python main.py problem=toy use_wandb=True"
 
 echo "Execution finished. Container removed."
