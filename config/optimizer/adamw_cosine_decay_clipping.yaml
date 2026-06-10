@@ -1,0 +1,13 @@
+_target_: flax.nnx.Optimizer
+tx:
+  _target_: optax.chain
+  _args_:
+    - _target_: optax.clip_by_global_norm
+      max_norm: 1.0
+    - _target_: ${ho_func:optax.inject_hyperparams,optax.adamw}
+      weight_decay: 1e-4
+      learning_rate:
+        _target_: optax.schedules.cosine_decay_schedule
+        init_value: ${training.learning_rate}
+        decay_steps: ${compute_train_steps:${training.epochs}, ${runtime.N}, ${training.batch_size}}
+        alpha: 0.0

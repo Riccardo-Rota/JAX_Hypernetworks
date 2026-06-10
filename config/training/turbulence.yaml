@@ -1,6 +1,6 @@
-epochs: 300
+epochs: 20000
 batch_size: 4096
-learning_rate: 1.0e-3
+learning_rate: 1.0e-5
 in_memory: true
 
 criterion:
