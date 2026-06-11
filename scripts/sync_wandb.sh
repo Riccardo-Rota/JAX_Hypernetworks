@@ -28,8 +28,7 @@ fi
 echo "[sync] Uploading offline runs under $RESULTS_DIR (timeout=${SYNC_TIMEOUT}s, parallel=${PARALLEL}) via $SIF ..."
 apptainer exec \
   --env WANDB_API_KEY="$WANDB_KEY" \
-  --env WANDB_START_METHOD=thread \
-  --env WANDB__SERVICE_WAIT="$SERVICE_WAIT" \
+  --env WANDB_X_SERVICE_WAIT="$SERVICE_WAIT" \
   --env RESULTS_DIR="$RESULTS_DIR" \
   --env SYNC_TIMEOUT="$SYNC_TIMEOUT" \
   --env PARALLEL="$PARALLEL" \
