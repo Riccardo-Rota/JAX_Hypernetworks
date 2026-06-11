@@ -190,3 +190,4 @@ cython_debug/
 # Datasets
 datasets/*
 !datasets/.gitkeep
+deprecated_datasets/

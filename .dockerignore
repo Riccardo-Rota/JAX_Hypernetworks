@@ -25,3 +25,4 @@ results_cluster/
 *.tar
 CLUSTER_TUTORIAL.md
 DOCKER_TUTORIAL.md
+deprecated_datasets/
