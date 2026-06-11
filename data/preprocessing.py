@@ -133,7 +133,14 @@ def prepare_datasets(
 
     splits_t = {"train": train_t, "val": val_t, "test": test_t}
 
-    # ---- For each split: select timesteps, flatten over (x, y), shuffle, save -
+    # Compute normalization stats from the TRAIN split only (in order to have no leakage)
+    tgt_tr = np.concatenate(
+    [density[train_t][..., None], pressure[train_t][..., None], velocity[train_t]],
+    axis=-1).reshape(-1, 4)
+    tgt_mean, tgt_std = tgt_tr.mean(0), tgt_tr.std(0) + 1e-8
+    time_mean, time_std = time_points[train_t].mean(), time_points[train_t].std() + 1e-8
+
+    # For each split: select timesteps, flatten over (x, y), shuffle, save
     rng = np.random.default_rng(seed)
 
     for split_name, t_idx in splits_t.items():
@@ -147,6 +154,10 @@ def prepare_datasets(
             axis=-1,
         )
         labels_flat = labels.reshape(-1, 4)
+
+        # Standardize labels and time using TRAIN split stats (no leakage)
+        labels_flat = (labels_flat - tgt_mean) / tgt_std
+        time_s = (time_s - time_mean) / time_std
 
         T_g, X_g, Y_g = np.meshgrid(time_s, x_points, y_points, indexing="ij")
 
@@ -165,6 +176,8 @@ def prepare_datasets(
         out_path.parent.mkdir(parents=True, exist_ok=True)
         with h5py.File(out_path, "w") as f:
             f.create_dataset("data", data=rows.astype(np.float32))
+            f.attrs["tgt_mean"], f.attrs["tgt_std"] = tgt_mean, tgt_std
+            f.attrs["time_mean"], f.attrs["time_std"] = time_mean, time_std
 
         print(f"==> Saved {split_name:>5}: {len(rows):>10,} rows -> {out_path}")
 

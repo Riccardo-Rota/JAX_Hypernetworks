@@ -293,6 +293,11 @@ def plot_2d_hdf5_comparison(
         if dataset_key is None:
             dataset_key = list(f.keys())[0]
         data = f[dataset_key][:]
+        # Load normalization constants, with defaults for backward compatibility
+        tgt_mean = f.attrs.get("tgt_mean", 0.0)
+        tgt_std = f.attrs.get("tgt_std", 1.0)
+        time_mean = f.attrs.get("time_mean", 0.0)
+        time_std = f.attrs.get("time_std", 1.0)
 
     # If var_bounds are provided, filter the data before plotting
     if var_bounds:
@@ -322,7 +327,8 @@ def plot_2d_hdf5_comparison(
         selected_times = unique_times
 
     for i, target_time in enumerate(selected_times):
-        hypervars = jnp.array([target_time])
+        denorm_time = target_time * time_std + time_mean
+        hypervars = jnp.array([target_time]) # Model expects normalized time
 
         mask = np.isclose(time_column, target_time, atol=time_tolerance)
         timestep_data = data[mask]
@@ -361,20 +367,25 @@ def plot_2d_hdf5_comparison(
             # Case A: Prediction has a corresponding exact target in the HDF5 file
             if out_idx < len(target_keys):
                 target_name = target_keys[out_idx]
-                exact_z = timestep_data[:, schema[target_name]]
-                error_z = jnp.abs(pred_z - exact_z)
+                exact_z_norm = timestep_data[:, schema[target_name]]
+
+                # De-normalize predictions and ground truth
+                # Assumes target_keys is ordered correctly to index into mean/std arrays
+                pred_z_denorm = pred_z * tgt_std[out_idx] + tgt_mean[out_idx]
+                exact_z_denorm = exact_z_norm * tgt_std[out_idx] + tgt_mean[out_idx]
+                error_z = jnp.abs(pred_z_denorm - exact_z_denorm)
 
                 fig, axes = plt.subplots(1, 3, figsize=(18, 5))
-                vmin = min(np.nanmin(pred_z), np.nanmin(exact_z))
-                vmax = max(np.nanmax(pred_z), np.nanmax(exact_z))
+                vmin = min(np.nanmin(pred_z_denorm), np.nanmin(exact_z_denorm))
+                vmax = max(np.nanmax(pred_z_denorm), np.nanmax(exact_z_denorm))
 
-                c0 = axes[0].tricontourf(x_np, y_np, pred_z, levels=50, cmap='viridis', vmin=vmin, vmax=vmax)
+                c0 = axes[0].tricontourf(x_np, y_np, pred_z_denorm, levels=50, cmap='viridis', vmin=vmin, vmax=vmax)
                 fig.colorbar(c0, ax=axes[0])
                 axes[0].set_title(f"Prediction ({target_name})")
                 axes[0].set_xlabel("x")
                 axes[0].set_ylabel("y")
 
-                c1 = axes[1].tricontourf(x_np, y_np, exact_z, levels=50, cmap='viridis', vmin=vmin, vmax=vmax)
+                c1 = axes[1].tricontourf(x_np, y_np, exact_z_denorm, levels=50, cmap='viridis', vmin=vmin, vmax=vmax)
                 fig.colorbar(c1, ax=axes[1])
                 axes[1].set_title(f"Exact ({target_name.replace('_', ' ').title()})")
                 axes[1].set_xlabel("x")
@@ -386,7 +397,7 @@ def plot_2d_hdf5_comparison(
                 axes[2].set_xlabel("x")
                 axes[2].set_ylabel("y")
 
-                fig.suptitle(f"Evaluation at t = {target_time:.3f}", fontsize=14, y=1.05)
+                fig.suptitle(f"Evaluation at t = {denorm_time:.3f}", fontsize=14, y=1.05)
                 save_name = f"comparison_2d_t{i}_{target_name}{extension}"
 
             # Case B: Extra model output with no corresponding exact data
@@ -396,11 +407,11 @@ def plot_2d_hdf5_comparison(
                 fig, ax = plt.subplots(1, 1, figsize=(7, 5))
                 c0 = ax.tricontourf(x_np, y_np, pred_z, levels=50, cmap='viridis')
                 fig.colorbar(c0, ax=ax)
-                ax.set_title(f"Prediction ({target_name})\nNo Exact Data Available")
+                ax.set_title(f"Prediction ({target_name}) (Normalized)\nNo De-normalization Available")
                 ax.set_xlabel("x")
                 ax.set_ylabel("y")
                 
-                fig.suptitle(f"Evaluation at t = {target_time:.3f}", fontsize=12, y=1.05)
+                fig.suptitle(f"Evaluation at t = {denorm_time:.3f}", fontsize=12, y=1.05)
                 save_name = f"comparison_2d_t{i}_{target_name}{extension}"
 
             plt.tight_layout()
