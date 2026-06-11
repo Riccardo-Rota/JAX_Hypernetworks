@@ -68,3 +68,6 @@ To check live the logs, find the path to the log being written by the run, by ru
 `ls runs/runs_*/*/*/default.log`
 or the one of the training function, by running
 `ls runs/runs_*/*/*/training.txt`
+
+Then to visualize the log run 
+`tail -F <path_to_log>`
