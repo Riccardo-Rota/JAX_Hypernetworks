@@ -61,3 +61,10 @@ machine api.wandb.ai
   password <your_API_key>
 ```
 *(Note: Replace `<your_API_key>` with your actual 40-character Weights & Biases token. Do not change the word `user`).*
+
+## Checking live the logs on cluster
+
+To check live the logs, find the path to the log being written by the run, by running
+`ls runs/runs_*/*/*/default.log`
+or the one of the training function, by running
+`ls runs/runs_*/*/*/training.txt`

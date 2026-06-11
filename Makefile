@@ -19,6 +19,8 @@ submit-cluster:
 
 # Upload offline W&B runs to the cloud. Run on the LOGIN NODE (needs internet).
 # Uses the wandb library inside the apptainer image -- no host install required.
+# example usage:
+#   RESULTS_DIR=results/runs_turbulence make sync-cluster
 sync-cluster:
 	@echo "Syncing offline W&B runs via apptainer..."
 	bash scripts/sync_wandb.sh
