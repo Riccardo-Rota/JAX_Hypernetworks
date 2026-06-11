@@ -3,7 +3,7 @@
 # INSIDE the apptainer image (no host wandb install required).
 # Usage:
 #   bash scripts/sync_wandb.sh            # sync results/ under the project root
-#   RESULTS_DIR=results/runs_turbulence bash scripts/sync_wandb.sh   # narrow it
+#   RESULTS_DIR=<path_to_specific_dir> bash scripts/sync_wandb.sh   # narrow it
 set -e
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

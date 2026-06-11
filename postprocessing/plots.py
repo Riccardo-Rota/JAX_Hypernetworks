@@ -298,6 +298,15 @@ def plot_2d_hdf5_comparison(
         tgt_std = f.attrs.get("tgt_std", 1.0)
         time_mean = f.attrs.get("time_mean", 0.0)
         time_std = f.attrs.get("time_std", 1.0)
+        # Order in which tgt_mean/tgt_std were computed (lets us look up stats by
+        # variable name, so any subset/ordering of target_keys de-normalizes correctly)
+        norm_keys = f.attrs.get("norm_keys", None)
+        if norm_keys is not None:
+            norm_keys = [k.decode() if isinstance(k, bytes) else str(k) for k in norm_keys]
+
+    def _stat(arr, idx):
+        # Scalar defaults (un-normalized / legacy files) -> identity de-normalization
+        return arr[idx] if np.ndim(arr) > 0 else arr
 
     # If var_bounds are provided, filter the data before plotting
     if var_bounds:
@@ -369,10 +378,12 @@ def plot_2d_hdf5_comparison(
                 target_name = target_keys[out_idx]
                 exact_z_norm = timestep_data[:, schema[target_name]]
 
-                # De-normalize predictions and ground truth
-                # Assumes target_keys is ordered correctly to index into mean/std arrays
-                pred_z_denorm = pred_z * tgt_std[out_idx] + tgt_mean[out_idx]
-                exact_z_denorm = exact_z_norm * tgt_std[out_idx] + tgt_mean[out_idx]
+                # De-normalize predictions and ground truth.
+                # Index the stats by variable NAME (not output position), so any
+                # subset/ordering of target_keys uses the correct mean/std.
+                stat_idx = norm_keys.index(target_name) if norm_keys and target_name in norm_keys else out_idx
+                pred_z_denorm = pred_z * _stat(tgt_std, stat_idx) + _stat(tgt_mean, stat_idx)
+                exact_z_denorm = exact_z_norm * _stat(tgt_std, stat_idx) + _stat(tgt_mean, stat_idx)
                 error_z = jnp.abs(pred_z_denorm - exact_z_denorm)
 
                 fig, axes = plt.subplots(1, 3, figsize=(18, 5))

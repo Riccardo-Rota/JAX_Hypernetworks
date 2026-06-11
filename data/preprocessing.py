@@ -134,6 +134,7 @@ def prepare_datasets(
     splits_t = {"train": train_t, "val": val_t, "test": test_t}
 
     # Compute normalization stats from the TRAIN split only (in order to have no leakage)
+    norm_keys = ["density", "pressure", "velocity_x", "velocity_y"]
     tgt_tr = np.concatenate(
     [density[train_t][..., None], pressure[train_t][..., None], velocity[train_t]],
     axis=-1).reshape(-1, 4)
@@ -178,6 +179,7 @@ def prepare_datasets(
             f.create_dataset("data", data=rows.astype(np.float32))
             f.attrs["tgt_mean"], f.attrs["tgt_std"] = tgt_mean, tgt_std
             f.attrs["time_mean"], f.attrs["time_std"] = time_mean, time_std
+            f.attrs["norm_keys"] = norm_keys
 
         print(f"==> Saved {split_name:>5}: {len(rows):>10,} rows -> {out_path}")
 
