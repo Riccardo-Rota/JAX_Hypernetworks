@@ -27,16 +27,19 @@ from metrics import *
 import time
 from utils import save_model, register_resolvers
 import json
+import logging
 import glob
 import wandb
 
 register_resolvers()
 
+log = logging.getLogger(__name__)
+
 @hydra.main(config_path="config", config_name="config", version_base="1.3")
 def main(cfg: DictConfig) -> None:
 
     run_path = os.getcwd()
-    print(f"Results will be saved in: {run_path}")
+    log.info(f"Results will be saved in: {run_path}")
 
     try:
         train_source = hydra.utils.instantiate(cfg.data_source.train)
@@ -61,7 +64,7 @@ def main(cfg: DictConfig) -> None:
             try:
                 wandb.init(project=project_name, entity=entity_name, config=config_dict, dir=run_path, tags=["hydra-run"], name=custom_name)
             except Exception as e:
-                print(f"Error initializing W&B: {e}")
+                log.error(f"Error initializing W&B: {e}")
                 use_wandb = False
 
         # Instantiate Models using Hydra
@@ -86,7 +89,7 @@ def main(cfg: DictConfig) -> None:
             resume_path=cfg.training.get('resume_from_checkpoint', None)
         )
 
-        print("Starting training...")
+        log.info("Starting training...")
         # Run Training
         start_time = time.time()
         history, final_early_stopping, best_epoch = train_model(
@@ -104,7 +107,7 @@ def main(cfg: DictConfig) -> None:
             use_wandb=use_wandb
         )
         end_time = time.time()
-        print("Training completed.")
+        log.info("Training completed.")
         # Run Testing
         test_metrics = test_model(
             model=model,
@@ -112,7 +115,7 @@ def main(cfg: DictConfig) -> None:
             batch_size=cfg.training.batch_size,
             metrics=metrics,
         )
-        print(f"Test Metrics: {test_metrics}")  
+        log.info(f"Test Metrics: {test_metrics}")  
         if use_wandb:
             wandb.log({f"test/{k}": float(v) for k, v in test_metrics.items()})
         
@@ -122,7 +125,7 @@ def main(cfg: DictConfig) -> None:
         plots_path = os.path.join(run_path, 'figures')
         if "postprocessing" in cfg and ("output_plots" in cfg.postprocessing or "loss_plots" in cfg.postprocessing):
             os.makedirs(plots_path, exist_ok=True)
-            print("\n--- Generating Plots ---")
+            log.info("\n--- Generating Plots ---")
             
             if "output_plots" in cfg.postprocessing:
                 for name, config in cfg.postprocessing.output_plots.items():
@@ -142,7 +145,7 @@ def main(cfg: DictConfig) -> None:
                     plot_name = os.path.splitext(base_name)[0]
                     wandb_images[f"plots/outputs/{plot_name}"] = wandb.Image(file_path)
                 wandb.log(wandb_images)
-                print(f"Uploaded {len(plot_files)} plots to W&B.")
+                log.info(f"Uploaded {len(plot_files)} plots to W&B.")
 
         num_epochs_run = len(history['train_results'])
         if best_epoch is None:
