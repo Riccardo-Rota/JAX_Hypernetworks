@@ -2,7 +2,7 @@
 USE_GPU ?= true
 OVERRIDES ?= 
 
-.PHONY: run-local submit-cluster
+.PHONY: run-local submit-cluster sync-cluster
 
 run-local:
 	@echo "Running locally on Docker (GPU: $(USE_GPU))..."
@@ -16,3 +16,9 @@ submit-cluster:
 		echo "Submitting to HPC CPU queue..."; \
 		qsub -q cpu -l select=1:ncpus=16 -v USE_GPU=$(USE_GPU),OVERRIDES="$(OVERRIDES)" scripts/submission.pbs; \
 	fi
+
+# Upload offline W&B runs to the cloud. Run on the LOGIN NODE (needs internet).
+# Uses the wandb library inside the apptainer image -- no host install required.
+sync-cluster:
+	@echo "Syncing offline W&B runs via apptainer..."
+	bash scripts/sync_wandb.sh

@@ -12,6 +12,8 @@ SCRATCH_DIR="/scratch_local/$USER/$PBS_JOBID"
 # Data Rescue Trap (Executes on ANY exit)
 rescue_data() {
     echo "[PBS Node] Job terminating. Rescuing data from scratch..."
+    # Stop the live-progress mirror (if running) before the final copy.
+    [ -n "${LIVE_SYNC_PID:-}" ] && kill "$LIVE_SYNC_PID" 2>/dev/null || true
     # We use -p to create the directory if it doesn't exist, preventing cp errors
     mkdir -p "$WORK_DIR/results"
     # Safely copy contents back, ignoring errors if results is empty
@@ -28,6 +30,20 @@ cp -r "$WORK_DIR/"* "$SCRATCH_DIR/"
 shopt -u dotglob
 cd "$SCRATCH_DIR"
 mkdir -p results
+
+# Live progress mirror: results (incl. training_log.txt) live on local scratch and
+# are only copied back by the EXIT trap at job end -- so you normally see nothing
+# until the job finishes. This background loop mirrors scratch -> the (networked)
+# submission dir every LIVE_SYNC_INTERVAL seconds so you can `tail -f` while it runs:
+#     tail -f "$PBS_O_WORKDIR"/results/runs_*/*/*/training_log.txt
+# (On PBS Pro you can additionally stream the job's stdout live with `#PBS -k doe`.)
+LIVE_SYNC_INTERVAL="${LIVE_SYNC_INTERVAL:-60}"
+mkdir -p "$WORK_DIR/results"
+( while true; do
+    sleep "$LIVE_SYNC_INTERVAL"
+    cp -ru "$SCRATCH_DIR/results/." "$WORK_DIR/results/" 2>/dev/null || true
+  done ) &
+LIVE_SYNC_PID=$!
 
 # Execution
 echo "[PBS Node] Launching execution..."

@@ -29,6 +29,14 @@ else
     echo "[Security] No ~/.netrc file found. WandB will run offline or fail."
 fi
 
+# WANDB MODE PROFILER
+if [ -z "$WANDB_KEY" ]; then
+    # No key -> online can only block on a login prompt; force offline.
+    export WANDB_MODE="${WANDB_MODE:-offline}"
+fi
+# Never let init block for the full walltime, even if something goes online.
+export WANDB_INIT_TIMEOUT="${WANDB_INIT_TIMEOUT:-120}"
+
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 echo "[Infrastructure] Engine: $ENGINE | GPU: $USE_GPU"
@@ -39,6 +47,8 @@ if [ "$ENGINE" = "docker" ]; then
     
     docker run -it --rm $GPU_FLAG \
       -e WANDB_API_KEY="$WANDB_KEY" \
+      -e WANDB_MODE="${WANDB_MODE:-online}" \
+      -e WANDB_INIT_TIMEOUT="$WANDB_INIT_TIMEOUT" \
       -v "$PROJECT_ROOT/config:/app/config" \
       -v "$PROJECT_ROOT/main.py:/app/main.py" \
       -v "$PROJECT_ROOT/results:/app/results" \
@@ -49,6 +59,8 @@ elif [ "$ENGINE" = "apptainer" ]; then
     
     apptainer exec $GPU_FLAG \
       --env WANDB_API_KEY="$WANDB_KEY" \
+      --env WANDB_MODE="${WANDB_MODE:-offline}" \
+      --env WANDB_INIT_TIMEOUT="$WANDB_INIT_TIMEOUT" \
       --bind "$PROJECT_ROOT/config:/app/config" \
       --bind "$PROJECT_ROOT/main.py:/app/main.py" \
       --bind "$PROJECT_ROOT/results:/app/results" \
