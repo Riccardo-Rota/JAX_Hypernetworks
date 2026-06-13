@@ -11,9 +11,12 @@ hyper_block:
     _target_: models.MLP
     num_neurons:
       - ${model.num_hypervariables}
-      - 64
-      - 64
-      - 128
+      - 8
+      - 8
+      - 16
+      - 16
+      - 32
+      - 32
     activation_functions:
       _target_: models.get_tanh
     rngs:
@@ -26,7 +29,7 @@ hyper_block:
 # PROJECTION HEAD
 proj_block:
   _target_: models.ProjectionHead
-  in_features: 128
+  in_features: 32
   input: latent_features
   output: weights
   kernel_init:
@@ -45,6 +48,10 @@ target_block:
     _target_: models.MLP
     num_neurons:
       - ${model.num_variables}
+      - 8
+      - 8
+      - 16
+      - 16
       - 8
       - 8
       - ${model.num_output_variables}

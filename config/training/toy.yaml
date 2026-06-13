@@ -1,5 +1,5 @@
-epochs: 4000
-batch_size: 1024
+epochs: 20000
+batch_size: 4096
 learning_rate: 1.0e-3
 in_memory: true
 

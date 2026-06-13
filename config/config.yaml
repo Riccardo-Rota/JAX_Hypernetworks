@@ -12,14 +12,14 @@ dataset_root: ${hydra:runtime.cwd}/datasets
 
 defaults:
   - optimizer: adamw_cosine_decay_clipping
-  - problem: toy            # Controller for consistency across configs: it can be toy or turbulence and realtes to data_source and postprocessing.
+  - problem: turbulence            # Controller for consistency across configs: it can be toy or turbulence and realtes to data_source and postprocessing.
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
   - _self_
 
 seed: 0
 
-use_wandb: false
+use_wandb: true
 wandb_settings:
   project: JaxHypernetworks
   entity: pacs_rota_bocchieri
