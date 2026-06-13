@@ -52,6 +52,7 @@ if [ "$ENGINE" = "docker" ]; then
       -v "$PROJECT_ROOT/config:/app/config" \
       -v "$PROJECT_ROOT/main.py:/app/main.py" \
       -v "$PROJECT_ROOT/results:/app/results" \
+      -v "$PROJECT_ROOT/datasets:/app/datasets" \
       "leonardobocchieri/jax-hypernetworks:latest" bash -c "python main.py $*"
 
 elif [ "$ENGINE" = "apptainer" ]; then
@@ -64,5 +65,6 @@ elif [ "$ENGINE" = "apptainer" ]; then
       --bind "$PROJECT_ROOT/config:/app/config" \
       --bind "$PROJECT_ROOT/main.py:/app/main.py" \
       --bind "$PROJECT_ROOT/results:/app/results" \
+      --bind "$PROJECT_ROOT/datasets:/app/datasets" \
       "$PROJECT_ROOT/jax-hypernetworks.sif" bash -c "cd /app && python main.py $*"
 fi
