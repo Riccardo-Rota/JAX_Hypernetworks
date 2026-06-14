@@ -8,7 +8,8 @@ frontend/
 results/
 results_cluster/
 my-checkpoints/
-chceckpoints/
+checkpoints/
+/home/riccardorota/PACS/PACSproject/notebooks/RRMSE_comparison_plots.png
 
 
 # Standard Hydra defaults (good to include just in case)
