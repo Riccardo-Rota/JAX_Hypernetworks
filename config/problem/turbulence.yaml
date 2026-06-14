@@ -6,5 +6,5 @@ defaults:
   - /preprocessing: turbulence
   - /data_source: turbulence
   - /training: turbulence
-  - /model: turbulence_mlp
+  - /model: turbulence_siren
   - /postprocessing: turbulence
