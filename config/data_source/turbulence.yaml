@@ -18,12 +18,12 @@ base_dataset: &base_dataset
 
 train:
   <<: *base_dataset
-  hdf5_path: ${dataset_root}/my_first_timestep.hdf5
+  hdf5_path: ${dataset_root}/turbulence_dataset_train.hdf5
 
 val:
   <<: *base_dataset
-  hdf5_path: ${dataset_root}/my_first_timestep.hdf5
+  hdf5_path: ${dataset_root}/turbulence_dataset_val.hdf5
 
 test:
   <<: *base_dataset
-  hdf5_path: ${dataset_root}/my_first_timestep.hdf5
+  hdf5_path: ${dataset_root}/turbulence_dataset_test.hdf5

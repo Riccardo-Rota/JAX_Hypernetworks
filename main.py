@@ -40,6 +40,7 @@ def main(cfg: DictConfig) -> None:
 
     run_path = os.getcwd()
     log.info(f"Results will be saved in: {run_path}")
+    use_wandb = cfg.get("use_wandb", False) 
 
     try:
         train_source = hydra.utils.instantiate(cfg.data_source.train)
@@ -52,7 +53,6 @@ def main(cfg: DictConfig) -> None:
         OmegaConf.set_struct(cfg, True)
         
         # Initialize W&B if enabled
-        use_wandb = cfg.get("use_wandb", False) 
         if use_wandb:
             dir_time = os.path.basename(run_path) 
             dir_day = os.path.basename(os.path.dirname(run_path)) 
