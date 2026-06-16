@@ -390,13 +390,15 @@ def plot_2d_hdf5_comparison(
                 vmin = min(np.nanmin(pred_z_denorm), np.nanmin(exact_z_denorm))
                 vmax = max(np.nanmax(pred_z_denorm), np.nanmax(exact_z_denorm))
 
-                c0 = axes[0].tricontourf(x_np, y_np, pred_z_denorm, levels=50, cmap='viridis', vmin=vmin, vmax=vmax)
+                contour_levels = np.linspace(vmin, vmax, 50)
+
+                c0 = axes[0].tricontourf(x_np, y_np, pred_z_denorm, levels=contour_levels, cmap='viridis', vmin=vmin, vmax=vmax)
                 fig.colorbar(c0, ax=axes[0])
                 axes[0].set_title(f"Prediction ({target_name})")
                 axes[0].set_xlabel("x")
                 axes[0].set_ylabel("y")
 
-                c1 = axes[1].tricontourf(x_np, y_np, exact_z_denorm, levels=50, cmap='viridis', vmin=vmin, vmax=vmax)
+                c1 = axes[1].tricontourf(x_np, y_np, exact_z_denorm, levels=contour_levels, cmap='viridis', vmin=vmin, vmax=vmax)
                 fig.colorbar(c1, ax=axes[1])
                 axes[1].set_title(f"Exact ({target_name.replace('_', ' ').title()})")
                 axes[1].set_xlabel("x")
