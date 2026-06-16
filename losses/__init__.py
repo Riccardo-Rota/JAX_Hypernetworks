@@ -1,6 +1,7 @@
-from .losses import L2Loss, CustomLoss
+from .losses import L2Loss, LpLoss, CombinedLoss
 
 __all__ = [
     'L2Loss', 
-    'CustomLoss'
+    'LpLoss',
+    'CombinedLoss'
 ]
