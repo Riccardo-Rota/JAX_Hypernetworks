@@ -32,11 +32,11 @@ class LpLoss(nnx.Module):
 class CombinedLoss(nnx.Module):
     def __init__(self, losses: List[nnx.Module], weights: Optional[List[float]] = None):
         super().__init__()
-        self.losses = to_list(losses)
+        self.losses = list(losses)
         if weights is None:
             self.weights = [1.0] * len(self.losses)
         else:
-            self.weights = weights
+            self.weights = list(weights)
 
     def __call__(self, predictions, targets):
         """Compute the weighted sum of multiple loss functions."""
