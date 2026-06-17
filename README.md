@@ -91,6 +91,11 @@ Then to visualize the log run
 ```bash
     uv pip install -r requirements.txt
 ```
+4.  **Run the Code**:
+You can now run the project using the `Makefile` by setting the `ENGINE` variable to `venv`.
+```bash
+    make run-local ENGINE=venv
+```
 
 ## NOTE: XLA autotuning warnings
 
