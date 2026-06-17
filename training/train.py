@@ -176,10 +176,8 @@ def train_model(
             f.write(f"Training Log - Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
     
     best_epoch = None
-    best_state = None
 
-    # Setup checkpoint manager and resume if starting from a checkpoint
-    start_epoch = 0
+    # Setup the best-model checkpointer (early stopping saves the best weights here)
     best_ckpt_dir = None
     best_checkpointer = None
     if checkpoint_manager is not None:
@@ -261,10 +259,10 @@ def train_model(
             metric_for_es = val_results_epoch[early_stopping_metric_name]
             early_stopping = early_stopping.update(metric_for_es)
 
-            # If metric improved, save the best epoch and model state
+            # If metric improved, save the best epoch and model state to disk
             if early_stopping.has_improved:
                 best_epoch = epoch
-                
+
                 if best_checkpointer is not None:
                     _, best_state, _ = nnx.split(model, nnx.Param, ...)
                     best_checkpointer.save(best_ckpt_dir, best_state, force=True)
@@ -273,28 +271,7 @@ def train_model(
                 if log_file_path:
                     with open(log_file_path, "a") as f:
                         f.write(f"Early stopping at epoch {epoch+1}. Best epoch was {best_epoch+1} with loss {early_stopping.best_metric:.8f}.\n")
-                    break
-
-            if epoch == num_epochs - 1 and best_epoch is not None and best_epoch != epoch:
-                if log_file_path:
-                    with open(log_file_path, "a") as f:
-                        f.write(f"Reached max epochs. Restoring best model from epoch {best_epoch+1} with loss {early_stopping.best_metric:.8f}.\n")
-                nnx.update(model, best_state)
-        
-        if early_stopping and best_epoch is not None and best_epoch != epoch:
-            if log_file_path:
-                with open(log_file_path, "a") as f:
-                    f.write(f"Reached max epochs. Restoring best model from epoch {best_epoch+1}.\n")
-            
-            # Safely restore from disk instead of RAM
-            if best_checkpointer is not None and os.path.exists(best_ckpt_dir):
-                _, original_state = nnx.split(model)
-                abstract_state = jax.tree.map(
-                    lambda x: jax.ShapeDtypeStruct(x.shape, x.dtype) if hasattr(x, 'shape') else x, 
-                    original_state
-                )
-                restored_state = best_checkpointer.restore(best_ckpt_dir, args=ocp.args.StandardRestore(abstract_state))
-                nnx.update(model, restored_state)
+                break
 
         if checkpoint_manager is not None and checkpoint_manager.should_save(epoch):
             _, params, _ = nnx.split(model, nnx.Param, ...)
@@ -313,9 +290,18 @@ def train_model(
         with open(log_file_path, "a") as f:
             f.write(f"Training Log - End time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
-    if best_checkpointer is not None and best_state is not None:
-        best_checkpointer.save(best_ckpt_dir, best_state, force=True)
-        best_checkpointer.wait_until_finished() 
+    # Restore the best model weights from disk (early stopping)
+    if best_checkpointer is not None and best_epoch is not None and os.path.exists(best_ckpt_dir):
+        if log_file_path:
+            with open(log_file_path, "a") as f:
+                f.write(f"Restoring best model from epoch {best_epoch+1}.\n")
+        _, abstract_state, _ = nnx.split(model, nnx.Param, ...)
+        abstract_state = jax.tree.map(
+            lambda x: jax.ShapeDtypeStruct(x.shape, x.dtype) if hasattr(x, 'shape') else x,
+            abstract_state
+        )
+        restored_state = best_checkpointer.restore(best_ckpt_dir, abstract_state)
+        nnx.update(model, restored_state)
 
     if checkpoint_manager is not None:
         checkpoint_manager.wait_until_finished()

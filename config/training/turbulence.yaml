@@ -30,5 +30,3 @@ early_stopping:
 early_stopping_metric: loss
 
 checkpointing_frequency: 200
-
-resume_from_checkpoint: null

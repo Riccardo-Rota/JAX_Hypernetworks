@@ -18,14 +18,14 @@ import jax.random as random
 import matplotlib.pyplot as plt
 from training import train_model
 from inference import test_model
-from utils import to_basic_types, load_training_checkpoint
+from utils import to_basic_types
 from flax import nnx
 from typing import Optional
 import optax
 from losses import *
 from metrics import *
 import time
-from utils import save_checkpoint, get_checkpoint_manager, restore_checkpoint
+from utils import save_checkpoint, get_checkpoint_manager, restore_checkpoint, register_resolvers
 import json
 import logging
 import glob
@@ -41,10 +41,11 @@ def main(cfg: DictConfig) -> None:
     run_path = os.getcwd()
     plots_path = os.path.join(run_path, 'figures')
     log.info(f"Results will be saved in: {run_path}")
-    use_wandb = cfg.get("use_wandb", False) 
+    use_wandb = cfg.get("use_wandb", False)
     train_flag = cfg.get("train_model", True)
     test_flag = cfg.get("test_model", True)
     inference_flag = cfg.get("plot_inference", True)
+    load_path = cfg.get("checkpoint", None)
 
     try:
         # Instantiate Data Sources
@@ -86,21 +87,22 @@ def main(cfg: DictConfig) -> None:
             log_path = os.path.join(run_path, 'training_log.txt')
             checkpoint_path = os.path.join(run_path, 'checkpoints')
             optimizer = hydra.utils.instantiate(cfg.optimizer, model=model)
-            
-            # Setup Checkpoint Manager and Restore Model/Optimizer State
-            checkpoint_path = os.path.join(run_path, 'checkpoints')
-            resume_path = cfg.training.get('resume_from_checkpoint', None)
-            # Resolve where we are pointing the manager
-            active_dir = resume_path if resume_path else checkpoint_path
+
+            # This run always writes its checkpoints into its own run directory
             checkpoint_manager = get_checkpoint_manager(
-                save_path=active_dir,
+                save_path=checkpoint_path,
                 checkpoint_frequency=cfg.training.get('checkpointing_frequency', None)
             )
-            start_epoch = restore_checkpoint(
-                manager=checkpoint_manager,
-                model=model,
-                optimizer=optimizer
-            )
+
+            # If a checkpoint path is given, restore weights + optimizer and resume from the next epoch
+            start_epoch = 0
+            if load_path is not None:
+                load_manager = get_checkpoint_manager(save_path=load_path)
+                start_epoch = restore_checkpoint(
+                    manager=load_manager,
+                    model=model,
+                    optimizer=optimizer
+                ) + 1
             log.info("Starting training...")
             # Run Training
             start_time = time.time()
@@ -144,16 +146,17 @@ def main(cfg: DictConfig) -> None:
             }
 
         if not train_flag and (test_flag or inference_flag):
-            checkpoint_path = cfg.get('resume_from_checkpoint', os.path.join(run_path, 'checkpoints'))
-            
-            checkpoint_manager = get_checkpoint_manager(save_path=checkpoint_path)
-            
-            # Notice we omit the optimizer here
-            restored_epoch = restore_checkpoint(
-                manager=checkpoint_manager,
-                model=model
-            )
-            log.info(f"Loaded weights from epoch {restored_epoch} for inference.")
+            # Load weights from the given checkpoint path, otherwise keep the freshly initialized model
+            if load_path is not None:
+                load_manager = get_checkpoint_manager(save_path=load_path)
+                # Notice we omit the optimizer here
+                restored_epoch = restore_checkpoint(
+                    manager=load_manager,
+                    model=model
+                )
+                log.info(f"Loaded weights from epoch {restored_epoch} for inference.")
+            else:
+                log.info("No checkpoint path provided; using freshly initialized model.")
             
         # Compute metrics on test set
         if test_flag:

@@ -30,5 +30,3 @@ early_stopping:
 early_stopping_metric: RRMSE
 
 checkpointing_frequency: 100
-
-resume_from_checkpoint: null
