@@ -9,7 +9,7 @@ schema: &schema
   velocity_y: 6
 
 base_dataset: &base_dataset
-  _target_: data.InMemoryHDF5Source
+  _target_: data_processing.InMemoryHDF5Source
   schema: *schema
   hypervar_keys: ["time"]
   var_keys: ["x", "y"]

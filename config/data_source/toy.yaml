@@ -1,6 +1,6 @@
 # For initializing train,val,test all here: define the shared properties using an anchor
 base_toy: &base_toy
-  _target_: data.ToyDataSource
+  _target_: data_processing.ToyDataSource
   f:
     _target_: utils.get_function_from_string
     f_string: "theta[0]*x[0] + exp(-theta[1]*x[0]) + sin(theta[2]*pi*x[0])"
