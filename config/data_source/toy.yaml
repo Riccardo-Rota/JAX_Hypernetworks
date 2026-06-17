@@ -15,7 +15,7 @@ base_toy: &base_toy
 train:
   <<: *base_toy
   N: 10000
-  n_realizations: 10
+  n_realizations: 1
   seed: ${seed}
 
 val:
