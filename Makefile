@@ -43,3 +43,7 @@ run-test3:
 	$(MAKE) run-local OVERRIDES="problem=toy model=toy_mlp train_model=false hydra.run.dir='results/test3_pretrained' checkpoint='checkpoints/toy_mlp_partial'"
 	@echo "=== Fine-tune the model ==="
 	$(MAKE) run-local OVERRIDES="problem=toy model=toy_mlp train_model=true training.epochs=200 hydra.run.dir='results/test3_finetuned' checkpoint='checkpoints/toy_mlp_partial'"
+
+run-test4:
+	@echo "=== Run with a challenging function: high-frequency sine wave ==="
+	$(MAKE) run-local OVERRIDES="problem=toy model=toy_siren training.epochs=200 data_source.base_toy.f.fstring='sin(theta*pi*x)' data_source.base_toy.hyper_domains=[-5,5] hydra.run.dir='results/test4'"
