@@ -30,13 +30,13 @@ sync-cluster:
 
 run-test1:
 	@echo "=== Inspect the results of a pre-trained model which performs well ==="
-	$(MAKE) run-local OVERRIDES= problem=toy model=toy_mlp train_model=false checkpoint="checkpoints/toy_mlp" hydra.run.dir="results/test1"
+	$(MAKE) run-local OVERRIDES="problem=toy model=toy_mlp train_model=false checkpoint='checkpoints/toy_mlp' hydra.run.dir='results/test1'"
 
 run-test2:
 	@echo "=== Load a pre-trained model which performs poorly, inspect results ==="
-	$(MAKE) run-local OVERRIDES= problem=toy model=toy_siren_naive epochs=400 hydra.run.dir="results/test2/siren"
+	$(MAKE) run-local OVERRIDES="problem=toy model=toy_siren_naive epochs=400 hydra.run.dir='results/test2/siren'"
 	@echo "=== Load a pre-trained model which performs poorly, inspect results ==="
-	$(MAKE) run-local OVERRIDES= problem=toy model=toy_siren epochs=400 hydra.run.dir="results/test2/siren_naive"
+	$(MAKE) run-local OVERRIDES="problem=toy model=toy_siren epochs=400 hydra.run.dir='results/test2/siren_naive'"
 
 run-test3:
 	@echo "=== Load a pre-trained model which performs poorly, inspect results ==="
