@@ -10,9 +10,9 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_ROOT"
 
 echo "[Data] Running download_data.py..."
-python "data/download_data.py" "$@"
+python "data_processing/download_data.py" "$@"
 
 echo "[Data] Running preprocessing.py..."
-python "data/preprocessing.py" "$@"
+python "data_processing/preprocessing.py" "$@"
 
 echo "[Data] Data generation complete."

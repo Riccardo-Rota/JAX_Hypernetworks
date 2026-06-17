@@ -16,7 +16,7 @@ RUN pip install --default-timeout=1000 --no-cache-dir -r requirements.txt
 
 # Copy your project's "library" code into the image
 # We explicitly copy directories to exclude `main.py` and `config/`
-COPY data /app/data/
+COPY data_processing /app/data_processing/
 COPY inference /app/inference/
 COPY losses /app/losses/
 COPY metrics /app/metrics/

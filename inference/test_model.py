@@ -5,7 +5,7 @@ from typing import Callable, Optional, List, Tuple, Union, Dict
 from tqdm import tqdm
 import grain.python as grain
 from training import build_state_from_parameters
-from data.grain_dataset import build_dataset
+from data_processing.grain_dataset import build_dataset
 
 
 def test_model(

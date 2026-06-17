@@ -253,7 +253,7 @@ def main():
         if not hdf5_path.exists():
             raise FileNotFoundError(
                 f"Master HDF5 file not found: {hdf5_path}\n"
-                f"  Run `python data/download_data.py` first "
+                f"  Run `python data_processing/download_data.py` first "
                 f"(or with `data.tcool={tcool}` to download the right file)."
             )
 
