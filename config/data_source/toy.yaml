@@ -14,7 +14,7 @@ base_toy: &base_toy
 # Define explicit splits that inherit the base properties (<<: *base_toy)
 train:
   <<: *base_toy
-  N: 100000
+  N: 10000
   n_realizations: 10
   seed: ${seed}
 

@@ -1,4 +1,4 @@
-epochs: 500
+epochs: 200
 batch_size: 4096
 learning_rate: 1.0e-4
 in_memory: true
@@ -9,10 +9,10 @@ criterion:
   losses:
     - _target_: losses.L2Loss
     - _target_: losses.LpLoss
-      p: 10.0
+      p: 5.0
   weights:
     - 1
-    - 0.2
+    - 0.00001
 
 metrics:
   RRMSE:

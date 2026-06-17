@@ -62,6 +62,18 @@ elif [ "$ENGINE" = "venv" ]; then
         echo "⚠️  [Environment Warning] Not running in an active Python virtual environment."
         echo "⚠️  Please create a venv, activate it, and install dependencies from requirements.txt."
     fi
+
+    # Check if the datasets folder exists and is not empty. If empy, generate default turbulence datasets (train, validation, test)
+    if [ ! -d "$PROJECT_ROOT/datasets" ] || [ -z "$(ls -A "$PROJECT_ROOT/datasets" 2>/dev/null)" ]; then
+        echo "⚠️  [Data] Datasets not found locally. Initializing generation..."
+        
+        echo "[Data] Running download_data.py..."
+        python "$PROJECT_ROOT/download_data.py"
+        
+        echo "[Data] Running preprocessing.py..."
+        python "$PROJECT_ROOT/preprocessing.py"
+    fi
+
     echo "[Execution] Running main.py with local Python interpreter..."
     # Pass WANDB vars and execute python, passing through all other script arguments
     WANDB_API_KEY="$WANDB_KEY" WANDB_MODE="${WANDB_MODE:-online}" WANDB_INIT_TIMEOUT="$WANDB_INIT_TIMEOUT" python "$PROJECT_ROOT/main.py" "$@"

@@ -1,9 +1,9 @@
 data:
-  # ---- Dataset selection (used by both download and preprocessing) ----------
+  # Dataset selection
   tcool: "0.10"            # one of: 0.03 0.06 0.10 0.18 0.32 0.56 1.00 1.78 3.16
   trajectory: 0
  
-  # ---- Train/val/test split (used by preprocessing only) --------------------
+  # Train/val/test split
   base_name: "turbulence_dataset"  # output prefix → <base_name>_{train,val,test}.hdf5
   chunk_size: 10
   train_ratio: 0.8

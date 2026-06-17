@@ -31,7 +31,7 @@ proj_block_first_kernel:
   siren_in_features: ${model.num_variables} 
   rngs:
     _target_: flax.nnx.Rngs
-    params: 42
+    params: ${seed}
 
 # PROJECTION HEAD FOR OTHER KERNELS
 proj_block_other_kernels:
@@ -43,7 +43,7 @@ proj_block_other_kernels:
   siren_in_features: ${model.num_variables}
   rngs:
     _target_: flax.nnx.Rngs
-    params: 42
+    params: ${seed}
 
 # PROJECTION HEAD FOR FIRST LAYER BIASES
 proj_block_first_biases:
@@ -55,7 +55,7 @@ proj_block_first_biases:
   siren_in_features: ${model.num_variables}
   rngs:
     _target_: flax.nnx.Rngs
-    params: 42
+    params: ${seed}
 
 # PROJECTION HEAD FOR OTHER LAYER BIASES
 proj_block_other_biases:
@@ -67,7 +67,7 @@ proj_block_other_biases:
   siren_in_features: ${model.num_variables}
   rngs:
     _target_: flax.nnx.Rngs
-    params: 42
+    params: ${seed}
 
 # TARGET NETWORK
 target_first_layer:
