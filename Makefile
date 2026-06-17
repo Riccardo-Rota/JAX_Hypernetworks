@@ -26,17 +26,20 @@ sync-cluster:
 	bash scripts/sync_wandb.sh
 
 
-run-test1:	OVERRIDES= problem=toy model=toy_mlp train_model=false checkpoint="checkpoints/toy_mlp" hydra.run.dir="results/test1"
-run-test1:	run-local
+## TESTS
 
-run-test2:	OVERRIDES= problem=toy model=toy_siren epochs=400 hydra.run.dir="results/test2"
-run-test2:	run-local
+run-test1:
+	@echo "=== Inspect the results of a pre-trained model which performs well ==="
+	$(MAKE) run-local OVERRIDES= problem=toy model=toy_mlp train_model=false checkpoint="checkpoints/toy_mlp" hydra.run.dir="results/test1"
 
-run-test3:	OVERRIDES= problem=toy model=toy_siren_naive epochs=400 hydra.run.dir="results/test3"
-run-test3:	run-local
-
-run-test4:
+run-test2:
 	@echo "=== Load a pre-trained model which performs poorly, inspect results ==="
-	$(MAKE) run-local OVERRIDES="problem=toy model=toy_mlp train_model=false hydra.run.dir='results/test4_pretrained' checkpoint='checkpoints/toy_mlp_partial'"
+	$(MAKE) run-local OVERRIDES= problem=toy model=toy_siren_naive epochs=400 hydra.run.dir="results/test2/siren"
+	@echo "=== Load a pre-trained model which performs poorly, inspect results ==="
+	$(MAKE) run-local OVERRIDES= problem=toy model=toy_siren epochs=400 hydra.run.dir="results/test2/siren_naive"
+
+run-test3:
+	@echo "=== Load a pre-trained model which performs poorly, inspect results ==="
+	$(MAKE) run-local OVERRIDES="problem=toy model=toy_mlp train_model=false hydra.run.dir='results/test3_pretrained' checkpoint='checkpoints/toy_mlp_partial'"
 	@echo "=== Fine-tune the model ==="
-	$(MAKE) run-local OVERRIDES="problem=toy model=toy_mlp train_model=true hydra.run.dir='results/test4_finetuned' checkpoint='checkpoints/toy_mlp_partial'"
+	$(MAKE) run-local OVERRIDES="problem=toy model=toy_mlp train_model=true hydra.run.dir='results/test3_finetuned' checkpoint='checkpoints/toy_mlp_partial'"
