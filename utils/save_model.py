@@ -1,78 +1,85 @@
+import os
+import jax
 from flax import nnx
 import orbax.checkpoint as ocp
+from typing import Optional
 from absl import logging
-from flax import nnx
-from typing import Tuple, Optional
-import jax
-import os
 
-logging.set_verbosity(logging.WARNING) # suppress verbose logging from Orbax
+logging.set_verbosity(logging.WARNING)
 
-def save_model(model: nnx.Module, path: str):
-    """
-    Saves only the learnable parameters of the nnx model.
-    """
-    _, params, _ = nnx.split(model, nnx.Param, ...)
-    checkpointer = ocp.StandardCheckpointer()
-    checkpointer.save(path, params)
-    checkpointer.wait_until_finished()
-
-def load_model(model: nnx.Module, path: str, abstract_params):
-    """
-    Restores the learnable parameters and updates the existing model in-place.
-    """
-    checkpointer = ocp.StandardCheckpointer()
-    restored_params = checkpointer.restore(path, abstract_params)
-    nnx.update(model, restored_params)
-
-
-def load_training_checkpoint(
+def get_checkpoint_manager(
     save_path: str,
-    checkpoint_frequency: Optional[int],
-    model: nnx.Module,
-    optimizer: nnx.Optimizer,
-    resume_path: Optional[str] = None
+    checkpoint_frequency: Optional[int] = None,
+    max_to_keep: int = 3
 ) -> ocp.CheckpointManager:
     """
-    Initializes the CheckpointManager for saving new checkpoints, and restores 
-    active model/optimizer weights if a checkpoint exists in the load directory.
+    Creates and returns an Orbax CheckpointManager to handle directory routing and retention.
     """
     options = ocp.CheckpointManagerOptions(
-        max_to_keep=3,
+        max_to_keep=max_to_keep,
         save_interval_steps=checkpoint_frequency,
         create=True
     )
-    manager = ocp.CheckpointManager(os.path.abspath(save_path), options=options)
+    return ocp.CheckpointManager(os.path.abspath(save_path), options=options)
 
-    load_dir = resume_path if resume_path else save_path
+
+def restore_checkpoint(
+    manager: ocp.CheckpointManager,
+    model: nnx.Module,
+    optimizer: Optional[nnx.Optimizer] = None,
+    step: Optional[int] = None
+) -> int:
+    """
+    Restores model parameters (and optionally optimizer) weights from disk. 
+    Mutates the `model` and `optimizer` in-place.
+    """
+    target_step = step if step is not None else manager.latest_step()
     
-    if load_dir == save_path:
-        load_manager = manager 
-    else:
-        load_manager = ocp.CheckpointManager(os.path.abspath(load_dir))
-    latest_step = load_manager.latest_step()
+    if target_step is None:
+        return 0 
+
+    print(f"Restoring checkpoint from step {target_step}...")
+
+    _, original_params, _ = nnx.split(model, nnx.Param, ...)
     
-    if latest_step is not None:
-        print(f"Found active checkpoint at epoch {latest_step} in '{load_dir}'. Restoring active weights...")
-        
-        _, original_params, _ = nnx.split(model, nnx.Param, ...)
+    abstract_params = jax.tree.map(
+        lambda x: jax.ShapeDtypeStruct(x.shape, x.dtype) if hasattr(x, 'shape') else x, 
+        original_params
+    )
+    abstract_payload = {'model': abstract_params}
+
+    if optimizer is not None:
         _, original_opt_state = nnx.split(optimizer)
-
-        abstract_params = jax.tree.map(lambda x: jax.ShapeDtypeStruct(x.shape, x.dtype), original_params)
-        abstract_opt_state = jax.tree.map(lambda x: jax.ShapeDtypeStruct(x.shape, x.dtype), original_opt_state)
-
-        abstract_payload = {
-            'model': abstract_params,
-            'optimizer': abstract_opt_state,
-            'epoch': 0
-        }
-
-        restored_payload = load_manager.restore(
-            latest_step, 
-            args=ocp.args.StandardRestore(abstract_payload)
+        abstract_opt_state = jax.tree.map(
+            lambda x: jax.ShapeDtypeStruct(x.shape, x.dtype) if hasattr(x, 'shape') else x, 
+            original_opt_state
         )
+        abstract_payload['optimizer'] = abstract_opt_state
 
-        nnx.update(model, restored_payload['model'])
+    restore_args = ocp.args.StandardRestore(abstract_payload)
+    restored_payload = manager.restore(target_step, args=restore_args)
+
+    nnx.update(model, restored_payload['model'])
+    if optimizer is not None and 'optimizer' in restored_payload:
         nnx.update(optimizer, restored_payload['optimizer'])
 
-    return manager
+    return target_step
+
+def save_checkpoint(
+    manager: ocp.CheckpointManager,
+    step: int,
+    model: nnx.Module,
+    optimizer: Optional[nnx.Optimizer] = None
+):
+    """
+    Extracts the state from the model and optimizer and saves it to disk.
+    """
+    _, model_state, _ = nnx.split(model, nnx.Param, ...)
+    payload = {'model': model_state}
+    
+    if optimizer is not None:
+        _, opt_state = nnx.split(optimizer)
+        payload['optimizer'] = opt_state
+
+    save_args = ocp.args.StandardSave(payload)
+    manager.save(step, args=save_args)

@@ -129,7 +129,8 @@ def train_model(
         early_stopping_metric: Optional[Union[str, int]] = None,
         log_file_path: Optional[str] = None,
         checkpoint_manager: Optional[ocp.CheckpointManager] = None,
-        use_wandb: bool = False
+        use_wandb: bool = False,
+        start_epoch: int = 0
         ) -> tuple:
     """
     Train the model for a specified number of epochs, with optional early stopping and logging.
@@ -147,6 +148,7 @@ def train_model(
         log_file_path (str, optional): Path to a log file where training progress will be logged. Default is None (no logging).
         checkpoint_manager (ocp.CheckpointManager, optional): An Orbax CheckpointManager for saving model checkpoints during training. Default is None (no checkpointing).
         use_wandb (bool, optional): Whether to log training metrics to Weights & Biases (wandb). Default is False.
+        start_epoch (int, optional): The epoch to start training from. Useful for resuming training from a checkpoint. Default is 0.
     Returns:
         A tuple containing:
             - history (Dict[str, List[float]]): A dictionary containing training and validation losses and metrics for each epoch.
@@ -181,15 +183,8 @@ def train_model(
     best_ckpt_dir = None
     best_checkpointer = None
     if checkpoint_manager is not None:
-        latest = checkpoint_manager.latest_step()
-        if latest is not None:
-            start_epoch = latest + 1
         best_ckpt_dir = os.path.join(str(checkpoint_manager.directory), "best")
         best_checkpointer = ocp.StandardCheckpointer()
-        if os.path.exists(best_ckpt_dir):
-            _, original_params, _ = nnx.split(model, nnx.Param, ...)
-            abstract_params = jax.tree.map(lambda x: jax.ShapeDtypeStruct(x.shape, x.dtype), original_params)
-            best_state = best_checkpointer.restore(best_ckpt_dir, abstract_params)
 
     # Main training loop
     pbar = tqdm(range(start_epoch, num_epochs))
@@ -269,21 +264,37 @@ def train_model(
             # If metric improved, save the best epoch and model state
             if early_stopping.has_improved:
                 best_epoch = epoch
-                _, best_state, _ = nnx.split(model, nnx.Param, ...)
+                
+                if best_checkpointer is not None:
+                    _, best_state, _ = nnx.split(model, nnx.Param, ...)
+                    best_checkpointer.save(best_ckpt_dir, best_state, force=True)
 
             if early_stopping.should_stop:
                 if log_file_path:
                     with open(log_file_path, "a") as f:
                         f.write(f"Early stopping at epoch {epoch+1}. Best epoch was {best_epoch+1} with loss {early_stopping.best_metric:.8f}.\n")
-                if best_state is not None:
-                    nnx.update(model, best_state)
-                break
+                    break
 
             if epoch == num_epochs - 1 and best_epoch is not None and best_epoch != epoch:
                 if log_file_path:
                     with open(log_file_path, "a") as f:
                         f.write(f"Reached max epochs. Restoring best model from epoch {best_epoch+1} with loss {early_stopping.best_metric:.8f}.\n")
                 nnx.update(model, best_state)
+        
+        if early_stopping and best_epoch is not None and best_epoch != epoch:
+            if log_file_path:
+                with open(log_file_path, "a") as f:
+                    f.write(f"Reached max epochs. Restoring best model from epoch {best_epoch+1}.\n")
+            
+            # Safely restore from disk instead of RAM
+            if best_checkpointer is not None and os.path.exists(best_ckpt_dir):
+                _, original_state = nnx.split(model)
+                abstract_state = jax.tree.map(
+                    lambda x: jax.ShapeDtypeStruct(x.shape, x.dtype) if hasattr(x, 'shape') else x, 
+                    original_state
+                )
+                restored_state = best_checkpointer.restore(best_ckpt_dir, args=ocp.args.StandardRestore(abstract_state))
+                nnx.update(model, restored_state)
 
         if checkpoint_manager is not None and checkpoint_manager.should_save(epoch):
             _, params, _ = nnx.split(model, nnx.Param, ...)
@@ -291,15 +302,12 @@ def train_model(
             save_payload = {
                 'model': params,
                 'optimizer': opt_state,
-                'epoch': epoch
             }
             # save asynchronously to avoid blocking the training loop
             checkpoint_manager.save(
                 epoch, 
                 args=ocp.args.StandardSave(save_payload)
             )
-            if best_state is not None:
-                best_checkpointer.save(best_ckpt_dir, best_state, force=True)
 
     if log_file_path:
         with open(log_file_path, "a") as f:

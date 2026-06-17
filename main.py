@@ -25,7 +25,7 @@ import optax
 from losses import *
 from metrics import *
 import time
-from utils import save_model, register_resolvers
+from utils import save_checkpoint, get_checkpoint_manager, restore_checkpoint
 import json
 import logging
 import glob
@@ -39,22 +39,28 @@ log = logging.getLogger(__name__)
 def main(cfg: DictConfig) -> None:
 
     run_path = os.getcwd()
+    plots_path = os.path.join(run_path, 'figures')
     log.info(f"Results will be saved in: {run_path}")
     use_wandb = cfg.get("use_wandb", False) 
+    train_flag = cfg.get("train_model", True)
+    test_flag = cfg.get("test_model", True)
+    inference_flag = cfg.get("plot_inference", True)
 
     try:
-        train_source = hydra.utils.instantiate(cfg.data_source.train)
-        val_source = hydra.utils.instantiate(cfg.data_source.val) # Use different seed for validation set
-        test_source = hydra.utils.instantiate(cfg.data_source.test) # Use different seed for test set
+        # Instantiate Data Sources
+        if train_flag:
+            train_source = hydra.utils.instantiate(cfg.data_source.train)
+            val_source = hydra.utils.instantiate(cfg.data_source.val)
+            train_dataset_len = len(train_source)
+            OmegaConf.set_struct(cfg, False)
+            cfg.runtime.N = train_dataset_len
+            OmegaConf.set_struct(cfg, True)
+        if test_flag or inference_flag:
+            test_source = hydra.utils.instantiate(cfg.data_source.test)
 
-        train_dataset_len = len(train_source)
-        OmegaConf.set_struct(cfg, False)
-        cfg.runtime.N = train_dataset_len
-        OmegaConf.set_struct(cfg, True)
-        
         # Initialize W&B if enabled
         if use_wandb:
-            dir_time = os.path.basename(run_path) 
+            dir_time = os.path.basename(run_path)
             dir_day = os.path.basename(os.path.dirname(run_path)) 
             dir_problem = os.path.basename(os.path.dirname(os.path.dirname(run_path)))
             custom_name = f"{dir_problem}_{dir_day}_{dir_time}"
@@ -67,75 +73,118 @@ def main(cfg: DictConfig) -> None:
                 log.error(f"Error initializing W&B: {e}")
                 use_wandb = False
 
-        # Instantiate Models using Hydra
+        # Instantiate Model
         model = hydra.utils.instantiate(cfg.model.manager)
-        
-        # Instantiate Training Components
-        criterion = hydra.utils.instantiate(cfg.training.criterion)
         metrics = {name: hydra.utils.instantiate(metric_cfg) for name, metric_cfg in cfg.training.metrics.items()}
 
-        early_stopping = None
-        if 'early_stopping' in cfg.training and cfg.training.early_stopping:
-            early_stopping = hydra.utils.instantiate(cfg.training.early_stopping, best_metric=float('inf'))
-
-        log_path = os.path.join(run_path, 'training_log.txt')
-        checkpoint_path = os.path.join(run_path, 'checkpoints')
-        optimizer = hydra.utils.instantiate(cfg.optimizer, model=model)
-        checkpoint_manager = load_training_checkpoint(
-            save_path=checkpoint_path,
-            checkpoint_frequency=cfg.training.get('checkpointing_frequency', None),
-            model=model,
-            optimizer=optimizer,
-            resume_path=cfg.training.get('resume_from_checkpoint', None)
-        )
-
-        log.info("Starting training...")
-        # Run Training
-        start_time = time.time()
-        history, final_early_stopping, best_epoch = train_model(
-            model=model,
-            train_source=train_source,
-            val_source=val_source,
-            optimizer=optimizer,
-            num_epochs=cfg.training.epochs,
-            batch_size=cfg.training.batch_size,
-            criterion=criterion,
-            metrics=metrics,
-            early_stopping=early_stopping,
-            log_file_path=log_path,
-            checkpoint_manager=checkpoint_manager,
-            use_wandb=use_wandb
-        )
-        end_time = time.time()
-        log.info("Training completed.")
-        # Run Testing
-        test_metrics = test_model(
-            model=model,
-            test_source=test_source,
-            batch_size=cfg.training.batch_size,
-            metrics=metrics,
-        )
-        log.info(f"Test Metrics: {test_metrics}")  
-        if use_wandb:
-            wandb.log({f"test/{k}": float(v) for k, v in test_metrics.items()})
-        
-        train_history = history['train_results']
-        val_history = history['val_results']
-
-        plots_path = os.path.join(run_path, 'figures')
-        if "postprocessing" in cfg and ("output_plots" in cfg.postprocessing or "loss_plots" in cfg.postprocessing):
-            os.makedirs(plots_path, exist_ok=True)
-            log.info("\n--- Generating Plots ---")
+        # Instantiate Training Components
+        if train_flag:
+            criterion = hydra.utils.instantiate(cfg.training.criterion)
+            early_stopping = None
+            if 'early_stopping' in cfg.training and cfg.training.early_stopping:
+                early_stopping = hydra.utils.instantiate(cfg.training.early_stopping, best_metric=float('inf'))
+            log_path = os.path.join(run_path, 'training_log.txt')
+            checkpoint_path = os.path.join(run_path, 'checkpoints')
+            optimizer = hydra.utils.instantiate(cfg.optimizer, model=model)
             
-            if "output_plots" in cfg.postprocessing:
-                for name, config in cfg.postprocessing.output_plots.items():
-                    hydra.utils.call(config, model=model)
-                    
-            if "loss_plots" in cfg.postprocessing:
+            # Setup Checkpoint Manager and Restore Model/Optimizer State
+            checkpoint_path = os.path.join(run_path, 'checkpoints')
+            resume_path = cfg.training.get('resume_from_checkpoint', None)
+            # Resolve where we are pointing the manager
+            active_dir = resume_path if resume_path else checkpoint_path
+            checkpoint_manager = get_checkpoint_manager(
+                save_path=active_dir,
+                checkpoint_frequency=cfg.training.get('checkpointing_frequency', None)
+            )
+            start_epoch = restore_checkpoint(
+                manager=checkpoint_manager,
+                model=model,
+                optimizer=optimizer
+            )
+            log.info("Starting training...")
+            # Run Training
+            start_time = time.time()
+            history, final_early_stopping, best_epoch = train_model(
+                model=model,
+                train_source=train_source,
+                val_source=val_source,
+                optimizer=optimizer,
+                num_epochs=cfg.training.epochs,
+                batch_size=cfg.training.batch_size,
+                criterion=criterion,
+                metrics=metrics,
+                early_stopping=early_stopping,
+                log_file_path=log_path,
+                checkpoint_manager=checkpoint_manager,
+                use_wandb=use_wandb,
+                start_epoch=start_epoch
+            )
+            end_time = time.time()
+            log.info("Training completed.")
+
+            if "postprocessing" in cfg and ("loss_plots" in cfg.postprocessing):
+                os.makedirs(plots_path, exist_ok=True)
+                log.info("\n--- Generating Loss Plots ---")
                 for name, config in cfg.postprocessing.loss_plots.items():
                     save_path = os.path.join(plots_path, f"{name}.png")
-                    hydra.utils.call(config, train_history=train_history, val_history=val_history, save_path=save_path)
+                    hydra.utils.call(config, train_history=history['train_results'], val_history=history['val_results'], save_path=save_path)
+            
+            train_data = {
+                'train_metrics': history['train_results'][best_epoch] if train_flag else None,
+                'val_metrics': history['val_results'][best_epoch] if train_flag else None,
+                'early_stopping_triggered': final_early_stopping.should_stop if final_early_stopping else False,
+                'num_epochs': len(history['train_results']),
+                'best_epoch': best_epoch if best_epoch is not None else len(history['train_results']) - 1,
+                'training_time_seconds': end_time - start_time,
+                'time_per_epoch_seconds': (end_time - start_time) / len(history['train_results']) if history['train_results'] else 0,
+                'training_history': {
+                    'train_results': history['train_results'],
+                    'val_results': history['val_results']
+                }
+            }
 
+        if not train_flag and (test_flag or inference_flag):
+            checkpoint_path = cfg.get('resume_from_checkpoint', os.path.join(run_path, 'checkpoints'))
+            
+            checkpoint_manager = get_checkpoint_manager(save_path=checkpoint_path)
+            
+            # Notice we omit the optimizer here
+            restored_epoch = restore_checkpoint(
+                manager=checkpoint_manager,
+                model=model
+            )
+            log.info(f"Loaded weights from epoch {restored_epoch} for inference.")
+            
+        # Compute metrics on test set
+        if test_flag:
+            test_metrics = test_model(
+                model=model,
+                test_source=test_source,
+                batch_size=cfg.training.batch_size,
+                metrics=metrics,
+            )
+            log.info(f"Test Metrics: {test_metrics}")  
+            if use_wandb:
+                wandb.log({f"test/{k}": float(v) for k, v in test_metrics.items()})
+        
+        # Run Inference on test set and generate plots
+        if inference_flag and "postprocessing" in cfg and "output_plots" in cfg.postprocessing:
+            os.makedirs(plots_path, exist_ok=True)
+            log.info("\n--- Generating Inference Plots ---")
+            for name, config in cfg.postprocessing.output_plots.items():
+                hydra.utils.call(config, model=model)
+
+        # Save JSON with all info
+        run_data = {}
+        if test_flag:
+            run_data['test_metrics'] = test_metrics
+        if train_flag:
+            run_data.update(train_data)
+        json_path = 'run_data.json'
+        with open(json_path, 'w') as f:
+            json.dump(to_basic_types(run_data), f, indent=4)
+
+        # Upload plots and summary to W&B if enabled
         if use_wandb and os.path.exists(plots_path):
             plot_files = glob.glob(os.path.join(plots_path, "*.png"))
             if plot_files:
@@ -146,40 +195,10 @@ def main(cfg: DictConfig) -> None:
                     wandb_images[f"plots/outputs/{plot_name}"] = wandb.Image(file_path)
                 wandb.log(wandb_images)
                 log.info(f"Uploaded {len(plot_files)} plots to W&B.")
-
-        num_epochs_run = len(history['train_results'])
-        if best_epoch is None:
-            best_epoch = num_epochs_run - 1
-
-        es_triggered = final_early_stopping.should_stop if final_early_stopping else False
-
-        # Save JSON with all info
-        run_data = {
-            'test_metrics': test_metrics,
-            'val_metrics': history['val_results'][best_epoch],
-            'train_metrics': history['train_results'][best_epoch],
-            'early_stopping_triggered': es_triggered,
-            'num_epochs': num_epochs_run,
-            'best_epoch': best_epoch,
-            'training_time_seconds': end_time - start_time,
-            'time_per_epoch_seconds': (end_time - start_time) / num_epochs_run,
-            'training_history': {
-                'train_results': history['train_results'],
-                'val_results': history['val_results']
-            }
-        }
-
-        json_path = 'run_data.json'
-        with open(json_path, 'w') as f:
-            json.dump(to_basic_types(run_data), f, indent=4)
-        if use_wandb:
             summary_data = {k: v for k, v in run_data.items() if k != 'training_history'}
             wandb.summary.update(to_basic_types(summary_data))
     
-    except Exception as e:
-        raise e
-    
-    finally:
+    finally: # Ensure W&B session is closed properly even if an error occurs
         if use_wandb:
             wandb.finish()
 
