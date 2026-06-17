@@ -5,7 +5,7 @@ set -e
 ENGINE=${ENGINE:-docker}
 USE_GPU=${USE_GPU:-false}
 
-# HARDWARE PROFILER (Fault Tolerance)
+# Check GPU availability if USE_GPU is true, Fall back to CPU if not available, with a warning
 if [ "$USE_GPU" = "true" ]; then
     if ! command -v nvidia-smi &> /dev/null || ! nvidia-smi &> /dev/null; then
         echo "⚠️  [Hardware Warning] NVIDIA drivers/hardware not detected."
@@ -21,28 +21,29 @@ if [ -f "$HOME/.netrc" ]; then
     WANDB_KEY=$(awk '/machine api\.wandb\.ai/ {f=1} f && /password/ {print $2; exit}' "$HOME/.netrc" 2>/dev/null || true)
     
     if [ -n "$WANDB_KEY" ]; then
-        echo "[Security] WandB credentials securely loaded from ~/.netrc"
+        echo "[W&B] WandB credentials securely loaded from ~/.netrc"
     else
-        echo "[Security] ~/.netrc found, but no WandB credentials detected."
+        echo "[W&B] ~/.netrc found, but no WandB credentials detected."
     fi
 else
-    echo "[Security] No ~/.netrc file found. WandB will run offline or fail."
+    echo "[W&B] Running without WandB."
 fi
 
 # WANDB MODE PROFILER
 if [ -z "$WANDB_KEY" ]; then
-    # No key -> online can only block on a login prompt; force offline.
+    # No key -> online can only block on a login prompt; force offline
     export WANDB_MODE="${WANDB_MODE:-offline}"
 fi
-# Never let init block for the full walltime, even if something goes online.
+# Never let init block for the full walltime, even if something goes online
 export WANDB_INIT_TIMEOUT="${WANDB_INIT_TIMEOUT:-120}"
 
+# Project root directory
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-echo "[Infrastructure] Engine: $ENGINE | GPU: $USE_GPU"
 echo "[Hydra Overrides] Passing to Python: $@"
 
 if [ "$ENGINE" = "docker" ]; then
+    # additional flags for GPU support if requested
     GPU_FLAG=$([ "$USE_GPU" = "true" ] && echo "--gpus all" || echo "")
     
     docker run -it --rm $GPU_FLAG \
@@ -53,6 +54,17 @@ if [ "$ENGINE" = "docker" ]; then
       -v "$PROJECT_ROOT/main.py:/app/main.py" \
       -v "$PROJECT_ROOT/results:/app/results" \
       "leonardobocchieri/jax-hypernetworks:latest" bash -c "python main.py $*"
+
+elif [ "$ENGINE" = "venv" ]; then
+    echo "[Environment] Checking for local Python venv..."
+    # Warn if not in a virtual environment (best practic)
+    if ! command -v python &> /dev/null || ! python -c "import sys; assert sys.prefix != sys.base_prefix" &> /dev/null; then
+        echo "⚠️  [Environment Warning] Not running in an active Python virtual environment."
+        echo "⚠️  Please create a venv, activate it, and install dependencies from requirements.txt."
+    fi
+    echo "[Execution] Running main.py with local Python interpreter..."
+    # Pass WANDB vars and execute python, passing through all other script arguments
+    WANDB_API_KEY="$WANDB_KEY" WANDB_MODE="${WANDB_MODE:-online}" WANDB_INIT_TIMEOUT="$WANDB_INIT_TIMEOUT" python "$PROJECT_ROOT/main.py" "$@"
 
 elif [ "$ENGINE" = "apptainer" ]; then
     GPU_FLAG=$([ "$USE_GPU" = "true" ] && echo "--nv" || echo "")
