@@ -1,0 +1,8 @@
+_target_: losses.CombinedLoss
+losses:
+  - _target_: losses.L2Loss
+  - _target_: losses.LpLoss
+    p: 5.0
+weights:
+  - 1
+  - 0.00001

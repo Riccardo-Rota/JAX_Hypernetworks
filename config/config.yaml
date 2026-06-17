@@ -14,16 +14,17 @@ defaults:
   - optimizer: adamw_cosine_decay_clipping
   # Controller for consistency across configs: it can be toy or turbulence and realtes to data_source and postprocessing.
   - problem: turbulence
+  - loss: l2
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
   - _self_
 
 seed: 0
 
-use_wandb: true
+use_wandb: false
 wandb_settings:
-  project: JaxHypernetworks
-  entity: pacs_rota_bocchieri
+  project: ???
+  entity: ???
 
 train_model: true
 test_model: true

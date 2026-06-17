@@ -92,7 +92,7 @@ def main(cfg: DictConfig) -> None:
 
         # Instantiate Training Components
         if train_flag:
-            criterion = hydra.utils.instantiate(cfg.training.criterion)
+            criterion = hydra.utils.instantiate(cfg.loss)
             early_stopping = None
             if 'early_stopping' in cfg.training and cfg.training.early_stopping:
                 early_stopping = hydra.utils.instantiate(cfg.training.early_stopping, best_metric=float('inf'))
