@@ -112,6 +112,24 @@ class MLPHead(ProjectionHead):
                  mlp_in_features: Optional[int] = None,
                  mlp_out_features: Optional[int] = None):
         
+        """
+        Initializes the MLPHead module for projecting hypernetwork latents into MLP parameters.
+
+        Args:
+            in_features (int): The dimensionality of the input latent space from the hypernetwork.
+            input (Optional[List[Union[str, Dict[str, str]]]]): The specific input feature keys 
+                or mappings required by the ProjectionHead parent class.
+            output (str): The identifier key for the output target parameter being generated.
+            rngs (Optional[nnx.Rngs], optional): Random number generators required by Flax NNX 
+                for parameter initialization.
+            mode (MLPInitMode, optional): Specifies whether this head generates a 'weight' matrix 
+                or a 'bias' vector for the target MLP.
+            mlp_in_features (Optional[int], optional): The number of input features to the target 
+                MLP layer. Strictly required if mode is 'weight'.
+            mlp_out_features (Optional[int], optional): The number of output features of the target 
+                MLP layer. Strictly required if mode is 'weight'.
+        """
+        
         # 1. Symmetry-breaking near-zero kernel
         kernel_init = nnx.initializers.normal(stddev=1e-5)
         

@@ -45,7 +45,11 @@ def main(cfg: DictConfig) -> None:
     train_flag = cfg.get("train_model", True)
     test_flag = cfg.get("test_model", True)
     inference_flag = cfg.get("plot_inference", True)
-    load_path = cfg.get("checkpoint", None)
+    checkpoint_path = cfg.get("checkpoint", None)
+    load_path = hydra.utils.to_absolute_path(checkpoint_path) if checkpoint_path else None
+
+    if train_flag == False and load_path is None:
+        log.warning("Training is disabled and no checkpoint path provided. The model will be initialized with random weights.")
 
     try:
         # Instantiate Data Sources
@@ -79,7 +83,7 @@ def main(cfg: DictConfig) -> None:
         metrics = {name: hydra.utils.instantiate(metric_cfg) for name, metric_cfg in cfg.training.metrics.items()}
 
         # Single load point: if a checkpoint path is given, load the model weights from it
-        # (shared by training and testing); otherwise the model is initialized as usual.
+        # otherwise the model is initialized as usual.
         if load_path is not None:
             load_model(model, load_path)
             log.info(f"Loaded model weights from: {load_path}")

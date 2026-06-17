@@ -13,6 +13,9 @@ from flax import nnx
 
     
 class L2Loss(nnx.Module):
+    """
+    Computes the standard L2 (Mean Squared Error) loss.
+    """
     def __init__(self):
         super().__init__()
 
@@ -21,6 +24,9 @@ class L2Loss(nnx.Module):
         return optax.l2_loss(predictions, targets)
 
 class LpLoss(nnx.Module):
+    """
+    Computes the Lp norm loss between predictions and targets.
+    """
     def __init__(self, p: float = 2.0):
         super().__init__()
         self.p = p
@@ -30,7 +36,22 @@ class LpLoss(nnx.Module):
         return jnp.sum(jnp.abs(predictions - targets) ** self.p)
     
 class CombinedLoss(nnx.Module):
+    """
+    Computes a weighted linear combination of multiple loss functions.
+    
+    This module allows for the composition of various distinct loss terms 
+    each scaled by an optional static weight.
+    """
     def __init__(self, losses: List[nnx.Module], weights: Optional[List[float]] = None):
+        """
+        Initializes the CombinedLoss module.
+
+        Args:
+            losses (List[nnx.Module]): A list of initialized loss function modules.
+            weights (Optional[List[float]], optional): A list of scalar weights corresponding 
+                to each loss function. If None, all losses are weighted equally with a factor of 1.0.
+                Must be the same length as the `losses` list if provided.
+        """
         super().__init__()
         self.losses = list(losses)
         if weights is None:
