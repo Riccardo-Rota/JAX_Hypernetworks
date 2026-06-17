@@ -34,12 +34,12 @@ run-test1:
 
 run-test2:
 	@echo "=== Load a pre-trained model which performs poorly, inspect results ==="
-	$(MAKE) run-local OVERRIDES="problem=toy model=toy_siren_naive epochs=400 hydra.run.dir='results/test2/siren'"
+	$(MAKE) run-local OVERRIDES="problem=toy model=toy_siren_naive training.epochs=200 hydra.run.dir='results/test2_naive'"
 	@echo "=== Load a pre-trained model which performs poorly, inspect results ==="
-	$(MAKE) run-local OVERRIDES="problem=toy model=toy_siren epochs=400 hydra.run.dir='results/test2/siren_naive'"
+	$(MAKE) run-local OVERRIDES="problem=toy model=toy_siren training.epochs=200 hydra.run.dir='results/test2_siren'"
 
 run-test3:
 	@echo "=== Load a pre-trained model which performs poorly, inspect results ==="
 	$(MAKE) run-local OVERRIDES="problem=toy model=toy_mlp train_model=false hydra.run.dir='results/test3_pretrained' checkpoint='checkpoints/toy_mlp_partial'"
 	@echo "=== Fine-tune the model ==="
-	$(MAKE) run-local OVERRIDES="problem=toy model=toy_mlp train_model=true hydra.run.dir='results/test3_finetuned' checkpoint='checkpoints/toy_mlp_partial'"
+	$(MAKE) run-local OVERRIDES="problem=toy model=toy_mlp train_model=true training.epochs=200 hydra.run.dir='results/test3_finetuned' checkpoint='checkpoints/toy_mlp_partial'"
