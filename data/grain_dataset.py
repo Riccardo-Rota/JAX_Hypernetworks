@@ -6,7 +6,9 @@ import jax.numpy as jnp
 import grain.python as grain
 
 class InMemoryHDF5Source(grain.RandomAccessDataSource):
-    """Dataset Source to be used when loading the HDF5 file entirely into RAM for fast access."""
+    """
+    Dataset Source to be used when loading the HDF5 file entirely into RAM for fast access.
+    """
 
     def __init__(
         self, 
@@ -18,6 +20,19 @@ class InMemoryHDF5Source(grain.RandomAccessDataSource):
         dataset_key: str = 'data',
         var_bounds: List[Tuple[float, float]] = None
     ):
+        """
+        Initializes the in-memory HDF5 data source.
+
+        Args:
+            hdf5_path (str): The file path to the HDF5 dataset.
+            schema (Dict[str, int]): A mapping from variable names to their column indices in the dataset.
+            hypervar_keys (Sequence[str]): A list of keys corresponding to hypervariables.
+            var_keys (Sequence[str]): A list of keys corresponding to standard variables.
+            target_keys (Sequence[str]): A list of keys corresponding to the target labels.
+            dataset_key (str, optional): The internal HDF5 key where the data matrix is stored. Defaults to 'data'.
+            var_bounds (List[Tuple[float, float]], optional): A list of (min, max) bounds to filter rows. 
+                Must match the length of var_keys. Defaults to None.
+        """
         with h5py.File(hdf5_path, 'r') as f:
             data = f[dataset_key][:] # Load entirely into memory
 
@@ -40,10 +55,26 @@ class InMemoryHDF5Source(grain.RandomAccessDataSource):
 
         self._data = data
 
-    def __len__(self):
+    def __len__(self) -> int:
+        """
+        Returns the total number of samples in the filtered dataset.
+
+        Returns:
+            int: Number of rows in the dataset.
+        """
         return len(self._data)
 
-    def __getitem__(self, idx: int):
+    def __getitem__(self, idx: int) -> Tuple[Dict[str, np.ndarray], np.ndarray]:
+        """
+        Retrieves a single sample from memory at the specified index.
+
+        Args:
+            idx (int): The index of the sample to retrieve.
+
+        Returns:
+            Tuple[Dict[str, np.ndarray], np.ndarray]: A tuple containing a dictionary of inputs 
+            ('hypervars', 'vars') and an array of target labels.
+        """
         single_sample = self._data[idx]
 
         return {
@@ -51,17 +82,39 @@ class InMemoryHDF5Source(grain.RandomAccessDataSource):
             "vars": single_sample[self.var_indices],
         }, single_sample[self.target_indices]
 
-    def dim_hypervars(self):
+    def dim_hypervars(self) -> int:
+        """
+        Returns the number of hypervariable features.
+
+        Returns:
+            int: Dimension of hypervariables.
+        """
         return len(self.hypervar_indices)
     
-    def dim_vars(self):
+    def dim_vars(self) -> int:
+        """
+        Returns the number of standard variable features.
+
+        Returns:
+            int: Dimension of standard variables.
+        """
         return len(self.var_indices)
     
-    def dim_labels(self):
+    def dim_labels(self) -> int:
+        """
+        Returns the number of target label features.
+
+        Returns:
+            int: Dimension of labels.
+        """
         return len(self.target_indices)
 
 
 class ToyDataSource(grain.RandomAccessDataSource):
+    """
+    In-memory data source that generates toy data using JAX, evaluating 
+    a provided parametric function over generated hypervariables and variables.
+    """
 
     def __init__(
         self,
@@ -71,9 +124,18 @@ class ToyDataSource(grain.RandomAccessDataSource):
         N: int,
         n_realizations: int,
         seed: int = 42):
+        """
+        Initializes the generated toy dataset.
 
-        # NOTE: if N % n_realization != 0, last group will have N % n_realization samples,
-        # and the rest will have n_realization samples (same as drop_remainder=False in batching operation)
+        Args:
+            f (Callable): The parametric function to evaluate. Must accept transposed arrays 
+                of shape (num_hypervars, N) and (num_vars, N).
+            hyper_domains (List[Tuple[float, float]]): List of (min, max) bounds for each hypervariable.
+            var_domains (List[Tuple[float, float]]): List of (min, max) bounds for each standard variable.
+            N (int): The total number of records to generate.
+            n_realizations (int): The number of times each unique hypervariable configuration is repeated.
+            seed (int, optional): Random seed for JAX PRNG.
+        """
 
         # Calculate the exact grouping and remainder
         n_full_groups = N // n_realizations
@@ -85,14 +147,11 @@ class ToyDataSource(grain.RandomAccessDataSource):
         # Create the repeat pattern
         repeats = [n_realizations] * n_full_groups + ([remainder] if remainder > 0 else [])
 
-        # jax generation of the dataset must be done on CPU to avoid GPU memory usage
+        # jax generation of the dataset must be done on CPU to avoid GPU VRAM exhaustion
         cpu_device = jax.devices("cpu")[0]
 
-        # Force all JAX operations inside this block to execute in system RAM (CPU)
         with jax.default_device(cpu_device):
             repeats_jax = jnp.array(repeats)
-
-            # Initialize JAX PRNG Key
             key = jax.random.PRNGKey(seed)
 
             # Generate Hypervariables
@@ -118,14 +177,15 @@ class ToyDataSource(grain.RandomAccessDataSource):
             vars_jax = jnp.stack(var_cols, axis=-1)
 
             # Evaluate the parametric function
-            # NOTE: variables must be (num_vars, N), since in Python single indexing inside f definition accesses rows
             labels_jax = f(hypervars_jax.T, vars_jax.T)
+
+            # Ensure correct dimensional output structures
             if labels_jax.ndim == 1:
                 labels_jax = labels_jax[:, jnp.newaxis] # to ensure (N, 1) and not (N,)
             else:
                 labels_jax = labels_jax.T # to ensure (N, num_labels) and not (num_labels, N)
 
-        # NOTE: if needed, we have to convert to np.ndarrays (not clear from documentation)
+        # Convert back to standard NumPy arrays for Grain compatibility
         self._hypervars = np.asarray(hypervars_jax)
         self._vars      = np.asarray(vars_jax)
         self._labels    = np.asarray(labels_jax)
@@ -137,22 +197,56 @@ class ToyDataSource(grain.RandomAccessDataSource):
         self.var_domains = var_domains
         self.f = f
 
-    def __len__(self):
+    def __len__(self) -> int:
+        """
+        Returns the total number of procedurally generated records.
+
+        Returns:
+            int: Number of records (N).
+        """
         return self._num_records
 
-    def __getitem__(self, idx: int):    
+    def __getitem__(self, idx: int) -> Tuple[Dict[str, np.ndarray], np.ndarray]:   
+        """
+        Retrieves a single generated sample.
+
+        Args:
+            idx (int): Index of the sample to retrieve.
+
+        Returns:
+            Tuple[Dict[str, np.ndarray], np.ndarray]: A tuple containing a dictionary of inputs 
+            ('hypervars', 'vars') and an array of target labels.
+        """ 
         return {
                 "hypervars": self._hypervars[idx],
                 "vars": self._vars[idx],
             }, self._labels[idx]
     
-    def dim_hypervars(self):
+    def dim_hypervars(self) -> int:
+        """
+        Returns the number of hypervariable features.
+
+        Returns:
+            int: Dimension of hypervariables.
+        """
         return self._hypervars.shape[1]
     
-    def dim_vars(self):
+    def dim_vars(self) -> int:
+        """
+        Returns the number of standard variable features.
+
+        Returns:
+            int: Dimension of standard variables.
+        """
         return self._vars.shape[1]
     
-    def dim_labels(self):
+    def dim_labels(self) -> int:
+        """
+        Returns the number of target label features.
+
+        Returns:
+            int: Dimension of labels.
+        """
         return self._labels.shape[1]    
 
 
@@ -161,25 +255,22 @@ def build_dataset(
     is_training: bool,
     batch_size: int = 32,
     drop_remainder: bool = False,
-    seed: int = 42,
-    num_threads: int = None,
-    prefetch_size: int = None
+    seed: int = 42
 ):
     """
-    Builds and returns an iterator over batched samples.
+    Builds and returns an iterator over batched samples using Google Grain.
  
     Args:
-        source:       Any RandomAccessDataSource
-        is_training:  If True, shuffles and repeats indefinitely;
-                      if False (val/test), iterates once without shuffling
-        batch_size:   Number of samples per batch
-        drop_remainder: If True, drops the last batch if it's smaller than batch_size
-        seed:         Random seed used for shuffling
-        num_threads:  Override the number of reader threads (None = auto).
-        prefetch_size: Override the prefetch buffer size (None = auto).
+        source (grain.RandomAccessDataSource): Any valid Grain RandomAccessDataSource.
+        is_training (bool): If True, shuffles and repeats the dataset indefinitely. 
+            If False (validation/testing), iterates exactly once without shuffling.
+        batch_size (int, optional): Number of samples per batch.
+        drop_remainder (bool, optional): If True, drops the final batch if it is smaller 
+            than batch_size.
+        seed (int, optional): Random seed used for the shuffling operation
  
     Returns:
-        A Python iterator yielding batches as dicts of arrays.
+        Iterator: A Python iterator yielding batches of data.
     """
 
     # Create MapDataset from the source
@@ -190,22 +281,11 @@ def build_dataset(
 
     dataset = dataset.batch(batch_size=batch_size, drop_remainder=drop_remainder)
 
-    # From documentation: "If the data are already loaded in memory,
-    # we recommend setting num_threads to 0 to avoid Python GIL contention by multiple threads."
-    # "https://google-grain.readthedocs.io/en/stable/grain.dataset.html#grain.ReadOptions"
-    # TODO: study about GIL and optimal number of threads
-    if num_threads is None:
-        num_threads = 0
-    
-    if prefetch_size is None:
-        prefetch_size = 0
-
     # Convert to IterDataset
     iter_dataset = dataset.to_iter_dataset(
-        # TODO: check if num_threads and prefetch_size are ok
         grain.ReadOptions(
-            num_threads=num_threads, 
-            prefetch_buffer_size=prefetch_size
+            num_threads=0, 
+            prefetch_buffer_size=0
         )
     )
     

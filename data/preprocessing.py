@@ -1,20 +1,3 @@
-"""
-preprocessing.py
-----------------
-Reads a master HDF5 file from The Well, extracts ONE trajectory, splits the
-TIME axis into train/val/test using a chunked random allocation, flattens
-each split over (x, y), and saves each split as a separate HDF5 file.
-
-Chunking strategy
------------------
-The temporal domain (T timesteps) is divided into consecutive chunks of
-`chunk_size` timesteps. Within each chunk, timesteps are randomly assigned
-to train/val/test according to the given ratios. This way every macroscopic
-phase of the turbulent evolution appears in all three splits.
-
-Each output row is float32: [time, x, y, density, pressure, vel_x, vel_y]
-"""
-
 from pathlib import Path
 
 import h5py
@@ -22,10 +5,10 @@ import numpy as np
 from omegaconf import DictConfig
 import shutil
 import sys
-from hydra import initialize, compose
+from hydra import initialize_config_dir, compose
 
-# Anchor everything to the project root; identical behaviour on any OS,
-# regardless of the user's current working directory.
+# Find project root and datasets directory.
+# Project root is file specific(download_data.py is two levels deep in the directory structure)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATASETS_DIR = PROJECT_ROOT / "datasets"
 
@@ -38,14 +21,23 @@ def temporal_chunk_split(
     seed: int,
 ):
     """
-    Return three sorted arrays of time indices (train, val, test).
+    Splits a temporal domain into train, validation, and test sets using a chunked random allocation strategy.
+    
+    Within each chunk of `chunk_size` consecutive timesteps, indices are uniformly and randomly allocated
+    to train, validation, and test sets based on the provided ratios. The remainder goes to the test set.
 
-    Within each chunk of `chunk_size` consecutive timesteps:
-      - int(chunk_size * train_ratio) timesteps go to train
-      - int(chunk_size * val_ratio)   timesteps go to val
-      - the remainder                  go to test
-    Allocation within the chunk is uniformly random.
+    Args:
+        n_timesteps (int): The total number of timesteps in the temporal domain.
+        chunk_size (int): The number of consecutive timesteps in each chunk.
+        train_ratio (float): The proportion of timesteps in each chunk to allocate to the training set.
+        val_ratio (float): The proportion of timesteps in each chunk to allocate to the validation set.
+        seed (int): The random seed for the numpy random number generator to ensure reproducibility.
+
+    Returns:
+        tuple[np.ndarray, np.ndarray, np.ndarray]: A tuple containing three sorted 1D numpy arrays of integers 
+        representing the time indices for the train, validation, and test splits, respectively.
     """
+
     rng = np.random.default_rng(seed)
     train_idx, val_idx, test_idx = [], [], []
 
@@ -71,7 +63,19 @@ def temporal_chunk_split(
 
 def _check_non_empty_splits(train_t, val_t, test_t, chunk_size,
                             train_ratio, val_ratio, test_ratio):
-    """Raise an error if any split is empty."""
+    
+    """
+    Validates that none of the generated temporal data splits (train, val, test) are empty.
+
+    Args:
+        train_t (np.ndarray): Array of time indices allocated to the training split.
+        val_t (np.ndarray): Array of time indices allocated to the validation split.
+        test_t (np.ndarray): Array of time indices allocated to the test split.
+        chunk_size (int): The size of the temporal chunks used during splitting.
+        train_ratio (float): The ratio of data allocated to the training split.
+        val_ratio (float): The ratio of data allocated to the validation split.
+        test_ratio (float): The ratio of data allocated to the test split.
+    """
     for name, arr, ratio in [
         ("train", train_t, train_ratio),
         ("val",   val_t,   val_ratio),
@@ -87,7 +91,7 @@ def _check_non_empty_splits(train_t, val_t, test_t, chunk_size,
 
 
 def prepare_datasets(
-    master_hdf5_path: str,
+    hdf5_path: str,
     base_name: str,
     trajectory_index: int,
     chunk_size: int,
@@ -96,13 +100,32 @@ def prepare_datasets(
     test_ratio: float,
     seed: int,
 ):
+    
+    """
+    Reads a HDF5 file, extracts a single trajectory, splits it temporally, normalizes the data,
+    flattens the spatial dimensions, and saves the resulting splits into separate HDF5 files.
+
+    Normalization statistics (mean and standard deviation) are computed strictly from the training 
+    split to avoid data leakage and then applied to all splits. The output data is shuffled.
+
+    Args:
+        hdf5_path (str): The file path to the downloaded HDF5 dataset.
+        base_name (str): The base prefix for the output HDF5 files.
+        trajectory_index (int): The index of the specific trajectory to extract from the master file.
+        chunk_size (int): The number of consecutive timesteps in each chunk for splitting.
+        train_ratio (float): The proportion of data to allocate to the training set.
+        val_ratio (float): The proportion of data to allocate to the validation set.
+        test_ratio (float): The proportion of data to allocate to the test set.
+        seed (int): The random seed used for splitting and shuffling to ensure reproducibility.
+    """
+
     if not np.isclose(train_ratio + val_ratio + test_ratio, 1.0):
         raise ValueError(
             f"Split ratios must sum to 1. Got {train_ratio + val_ratio + test_ratio}"
         )
 
     # Load one trajectory
-    with h5py.File(master_hdf5_path, "r") as f:
+    with h5py.File(hdf5_path, "r") as f:
         n_traj = f["t0_fields"]["density"].shape[0]
         if trajectory_index >= n_traj:
             raise IndexError(
@@ -127,9 +150,6 @@ def prepare_datasets(
     _check_non_empty_splits(
         train_t, val_t, test_t, chunk_size, train_ratio, val_ratio, test_ratio
     )
-
-    print(f"==> {n_timesteps} timesteps -> chunks of {chunk_size}")
-    print(f"    train: {len(train_t)} | val: {len(val_t)} | test: {len(test_t)} timesteps")
 
     splits_t = {"train": train_t, "val": val_t, "test": test_t}
 
@@ -181,39 +201,64 @@ def prepare_datasets(
             f.attrs["time_mean"], f.attrs["time_std"] = time_mean, time_std
             f.attrs["norm_keys"] = norm_keys
 
-        print(f"==> Saved {split_name:>5}: {len(rows):>10,} rows -> {out_path}")
 
-def cleanup_raw_download():
-    """Delete the raw HF download and HF cache, keeping only the split files."""
-    raw_dir   = DATASETS_DIR / "data"        # raw HF files (data/train/*.hdf5)
-    cache_dir = DATASETS_DIR / ".cache"      # huggingface_hub cache
+def cleanup_raw_download(master_hdf5_path: str | Path) -> None:
+    """
+    Safely deletes the specific raw master HDF5 file to free disk space.
 
-    for path in (raw_dir, cache_dir):
-        if path.exists():
-            shutil.rmtree(path)
-            print(f"==> Removed {path}")
+    Args:
+        master_hdf5_path (str | Path): The precise path to the raw master file.
+    """
+    target_path = Path(master_hdf5_path)
+
+    # Strict validation: Ensure it exists and is specifically a file, not a directory.
+    if target_path.exists() and target_path.is_file():
+        try:
+            # Precise deletion: unlink() deletes only the specific file.
+            target_path.unlink()
+        except PermissionError:
+            print(f"==> Error: Permission denied when attempting to remove {target_path}")
+    else:
+        print(f"==> Warning: Target raw file not found or is not a file: {target_path}")
+    
+    # Attempt to clean up empty parent directories
+    # Hugging Face structure is typically: datasets/data/train/file.hdf5
+    train_dir = target_path.parent
+    data_dir = train_dir.parent
+
+    for directory in [train_dir, data_dir]:
+        if directory.exists() and directory.is_dir():
+            try:
+                # rmdir() acts as a strict safety gate: it fails if the folder is not empty
+                directory.rmdir()
+            except OSError:
+                # OSError (specifically ENOTEMPTY) means other files exist.
+                # We stop the loop here to avoid touching higher-level directories.
+                break
 
 
 def main():
     overrides = sys.argv[1:]
-    with initialize(version_base="1.3", config_path="../config"):
+    config_dir = str(PROJECT_ROOT / "config")
+
+    with initialize_config_dir(version_base="1.3", config_dir=config_dir):
         cfg = compose(config_name="config", overrides=overrides)
 
         tcool = cfg.preprocessing.data.tcool
-        master_hdf5_path = (
+        hdf5_path = (
             DATASETS_DIR
             / f"data/train/turbulent_radiative_layer_tcool_{float(tcool):.2f}.hdf5"
         )
 
-        if not master_hdf5_path.exists():
+        if not hdf5_path.exists():
             raise FileNotFoundError(
-                f"Master HDF5 file not found: {master_hdf5_path}\n"
+                f"Master HDF5 file not found: {hdf5_path}\n"
                 f"  Run `python data/download_data.py` first "
                 f"(or with `data.tcool={tcool}` to download the right file)."
             )
 
         prepare_datasets(
-            master_hdf5_path=str(master_hdf5_path),
+            hdf5_path=str(hdf5_path),
             base_name=cfg.preprocessing.data.base_name,
             trajectory_index=cfg.preprocessing.data.trajectory,
             chunk_size=cfg.preprocessing.data.chunk_size,
@@ -223,7 +268,7 @@ def main():
             seed=cfg.preprocessing.data.seed,
         )
 
-        cleanup_raw_download()
+        cleanup_raw_download(hdf5_path)
 
 
 if __name__ == "__main__":
