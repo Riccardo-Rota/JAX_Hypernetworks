@@ -25,7 +25,7 @@ import optax
 from losses import *
 from metrics import *
 import time
-from utils import save_checkpoint, get_checkpoint_manager, restore_checkpoint, register_resolvers
+from utils import load_model, register_resolvers
 import json
 import logging
 import glob
@@ -78,6 +78,14 @@ def main(cfg: DictConfig) -> None:
         model = hydra.utils.instantiate(cfg.model.manager)
         metrics = {name: hydra.utils.instantiate(metric_cfg) for name, metric_cfg in cfg.training.metrics.items()}
 
+        # Single load point: if a checkpoint path is given, load the model weights from it
+        # (shared by training and testing); otherwise the model is initialized as usual.
+        if load_path is not None:
+            load_model(model, load_path)
+            log.info(f"Loaded model weights from: {load_path}")
+        else:
+            log.info("No checkpoint path provided; using freshly initialized model.")
+
         # Instantiate Training Components
         if train_flag:
             criterion = hydra.utils.instantiate(cfg.training.criterion)
@@ -88,23 +96,8 @@ def main(cfg: DictConfig) -> None:
             checkpoint_path = os.path.join(run_path, 'checkpoints')
             optimizer = hydra.utils.instantiate(cfg.optimizer, model=model)
 
-            # This run always writes its checkpoints into its own run directory
-            checkpoint_manager = get_checkpoint_manager(
-                save_path=checkpoint_path,
-                checkpoint_frequency=cfg.training.get('checkpointing_frequency', None)
-            )
-
-            # If a checkpoint path is given, restore weights + optimizer and resume from the next epoch
-            start_epoch = 0
-            if load_path is not None:
-                load_manager = get_checkpoint_manager(save_path=load_path)
-                start_epoch = restore_checkpoint(
-                    manager=load_manager,
-                    model=model,
-                    optimizer=optimizer
-                ) + 1
             log.info("Starting training...")
-            # Run Training
+            # Run Training (continues from the weights loaded above, if any)
             start_time = time.time()
             history, final_early_stopping, best_epoch = train_model(
                 model=model,
@@ -117,9 +110,8 @@ def main(cfg: DictConfig) -> None:
                 metrics=metrics,
                 early_stopping=early_stopping,
                 log_file_path=log_path,
-                checkpoint_manager=checkpoint_manager,
-                use_wandb=use_wandb,
-                start_epoch=start_epoch
+                checkpoint_path=checkpoint_path,
+                use_wandb=use_wandb
             )
             end_time = time.time()
             log.info("Training completed.")
@@ -131,12 +123,13 @@ def main(cfg: DictConfig) -> None:
                     save_path = os.path.join(plots_path, f"{name}.png")
                     hydra.utils.call(config, train_history=history['train_results'], val_history=history['val_results'], save_path=save_path)
             
+            best_idx = best_epoch if best_epoch is not None else len(history['train_results']) - 1
             train_data = {
-                'train_metrics': history['train_results'][best_epoch] if train_flag else None,
-                'val_metrics': history['val_results'][best_epoch] if train_flag else None,
+                'train_metrics': history['train_results'][best_idx],
+                'val_metrics': history['val_results'][best_idx],
                 'early_stopping_triggered': final_early_stopping.should_stop if final_early_stopping else False,
                 'num_epochs': len(history['train_results']),
-                'best_epoch': best_epoch if best_epoch is not None else len(history['train_results']) - 1,
+                'best_epoch': best_idx,
                 'training_time_seconds': end_time - start_time,
                 'time_per_epoch_seconds': (end_time - start_time) / len(history['train_results']) if history['train_results'] else 0,
                 'training_history': {
@@ -145,19 +138,6 @@ def main(cfg: DictConfig) -> None:
                 }
             }
 
-        if not train_flag and (test_flag or inference_flag):
-            # Load weights from the given checkpoint path, otherwise keep the freshly initialized model
-            if load_path is not None:
-                load_manager = get_checkpoint_manager(save_path=load_path)
-                # Notice we omit the optimizer here
-                restored_epoch = restore_checkpoint(
-                    manager=load_manager,
-                    model=model
-                )
-                log.info(f"Loaded weights from epoch {restored_epoch} for inference.")
-            else:
-                log.info("No checkpoint path provided; using freshly initialized model.")
-            
         # Compute metrics on test set
         if test_flag:
             test_metrics = test_model(

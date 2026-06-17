@@ -12,10 +12,9 @@ import copy
 from datetime import datetime
 import grain.python as grain
 from optax.contrib._reduce_on_plateau import ReduceLROnPlateauState
-from data.grain_dataset import build_dataset
+from data_processing.grain_dataset import build_dataset
 from flax.training import early_stopping as flax_early_stopping
-from utils import extract_lr_info
-import orbax.checkpoint as ocp
+from utils import extract_lr_info, save_model, load_model
 import os
 from absl import logging
 import wandb
@@ -128,9 +127,8 @@ def train_model(
         early_stopping: Optional[flax_early_stopping.EarlyStopping] = None,
         early_stopping_metric: Optional[Union[str, int]] = None,
         log_file_path: Optional[str] = None,
-        checkpoint_manager: Optional[ocp.CheckpointManager] = None,
+        checkpoint_path: Optional[str] = None,
         use_wandb: bool = False,
-        start_epoch: int = 0
         ) -> tuple:
     """
     Train the model for a specified number of epochs, with optional early stopping and logging.
@@ -146,9 +144,8 @@ def train_model(
         early_stopping (flax.training.early_stopping.EarlyStopping, optional): An EarlyStopping object to monitor validation performance and stop training early if needed. Default is None.
         early_stopping_metric (str or int, optional): The metric to monitor for early stopping. Can be a metric name or index. Default is None (uses the validation loss).
         log_file_path (str, optional): Path to a log file where training progress will be logged. Default is None (no logging).
-        checkpoint_manager (ocp.CheckpointManager, optional): An Orbax CheckpointManager for saving model checkpoints during training. Default is None (no checkpointing).
+        checkpoint_path (str, optional): Directory where the best model is saved (under a "best" subfolder). Default is None (no checkpointing).
         use_wandb (bool, optional): Whether to log training metrics to Weights & Biases (wandb). Default is False.
-        start_epoch (int, optional): The epoch to start training from. Useful for resuming training from a checkpoint. Default is 0.
     Returns:
         A tuple containing:
             - history (Dict[str, List[float]]): A dictionary containing training and validation losses and metrics for each epoch.
@@ -177,15 +174,14 @@ def train_model(
     
     best_epoch = None
 
-    # Setup the best-model checkpointer (early stopping saves the best weights here)
+    # Setup the best-model checkpoint directory (params-only StandardCheckpointer under "best")
     best_ckpt_dir = None
-    best_checkpointer = None
-    if checkpoint_manager is not None:
-        best_ckpt_dir = os.path.join(str(checkpoint_manager.directory), "best")
-        best_checkpointer = ocp.StandardCheckpointer()
+    if checkpoint_path is not None:
+        os.makedirs(checkpoint_path, exist_ok=True)
+        best_ckpt_dir = os.path.join(checkpoint_path, "best")
 
     # Main training loop
-    pbar = tqdm(range(start_epoch, num_epochs))
+    pbar = tqdm(range(num_epochs))
     for epoch in pbar:
         metrics.reset()
         train_iter = build_dataset(train_source, is_training=True,  batch_size=batch_size, seed=epoch)
@@ -259,13 +255,11 @@ def train_model(
             metric_for_es = val_results_epoch[early_stopping_metric_name]
             early_stopping = early_stopping.update(metric_for_es)
 
-            # If metric improved, save the best epoch and model state to disk
+            # If metric improved, record the best epoch and save the best model to disk
             if early_stopping.has_improved:
                 best_epoch = epoch
-
-                if best_checkpointer is not None:
-                    _, best_state, _ = nnx.split(model, nnx.Param, ...)
-                    best_checkpointer.save(best_ckpt_dir, best_state, force=True)
+                if best_ckpt_dir is not None:
+                    save_model(model, best_ckpt_dir)
 
             if early_stopping.should_stop:
                 if log_file_path:
@@ -273,38 +267,16 @@ def train_model(
                         f.write(f"Early stopping at epoch {epoch+1}. Best epoch was {best_epoch+1} with loss {early_stopping.best_metric:.8f}.\n")
                 break
 
-        if checkpoint_manager is not None and checkpoint_manager.should_save(epoch):
-            _, params, _ = nnx.split(model, nnx.Param, ...)
-            _, opt_state = nnx.split(optimizer)
-            save_payload = {
-                'model': params,
-                'optimizer': opt_state,
-            }
-            # save asynchronously to avoid blocking the training loop
-            checkpoint_manager.save(
-                epoch, 
-                args=ocp.args.StandardSave(save_payload)
-            )
-
     if log_file_path:
         with open(log_file_path, "a") as f:
             f.write(f"Training Log - End time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
-    # Restore the best model weights from disk (early stopping)
-    if best_checkpointer is not None and best_epoch is not None and os.path.exists(best_ckpt_dir):
+    # Restore the best model weights from disk so the returned model is the best one seen
+    if best_ckpt_dir is not None and best_epoch is not None and os.path.exists(best_ckpt_dir):
         if log_file_path:
             with open(log_file_path, "a") as f:
                 f.write(f"Restoring best model from epoch {best_epoch+1}.\n")
-        _, abstract_state, _ = nnx.split(model, nnx.Param, ...)
-        abstract_state = jax.tree.map(
-            lambda x: jax.ShapeDtypeStruct(x.shape, x.dtype) if hasattr(x, 'shape') else x,
-            abstract_state
-        )
-        restored_state = best_checkpointer.restore(best_ckpt_dir, abstract_state)
-        nnx.update(model, restored_state)
-
-    if checkpoint_manager is not None:
-        checkpoint_manager.wait_until_finished()
+        load_model(model, best_ckpt_dir)
 
     if use_wandb and best_ckpt_dir is not None and os.path.exists(best_ckpt_dir):
         print(f"Uploading best checkpoint to W&B from {best_ckpt_dir}...")

@@ -24,7 +24,11 @@ wandb_settings:
   project: JaxHypernetworks
   entity: pacs_rota_bocchieri
 
-checkpoint: null
+train_model: true
+test_model: true
+plot_inference: true
+
+checkpoint: /home/rrota/pacs/JAX_Hypernetworks/checkpoints/best
 
 # NOTE: N for toy problem can be found at congif-time, while for turbulence problem it is determined at runtime.
 # This is because for the turbulence problem, the number of variables (N) depends on the specific dataset and how it is processed, which may not be known until the data is loaded and analyzed during runtime.
