@@ -195,3 +195,4 @@ deprecated_datasets/
 # Sphinx documentation (experimental -- ignored for now)
 docs/
 make_docs.sh
+notebooks/
