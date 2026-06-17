@@ -45,8 +45,8 @@ target_block:
     w0_other: 30.0
     num_neurons:
       - ${model.num_variables}
-      - 16
-      - 16
+      - 8
+      - 8
       - ${model.num_output_variables}
     rngs:
       _target_: flax.nnx.Rngs

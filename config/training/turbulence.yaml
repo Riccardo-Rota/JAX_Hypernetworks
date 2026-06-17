@@ -4,15 +4,15 @@ learning_rate: 1.0e-4
 in_memory: true
 
 criterion:
-  # _target_: losses.L2Loss
-  _target_: losses.CombinedLoss
-  losses:
-    - _target_: losses.L2Loss
-    - _target_: losses.LpLoss
-      p: 5.0
-  weights:
-    - 1
-    - 0.00001
+  _target_: losses.L2Loss
+  # _target_: losses.CombinedLoss
+  # losses:
+  #   - _target_: losses.L2Loss
+  #   - _target_: losses.LpLoss
+  #     p: 5.0
+  # weights:
+  #   - 1
+  #   - 0.00001
 
 metrics:
   RRMSE:

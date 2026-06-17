@@ -11,10 +11,9 @@ hyper_block:
     _target_: models.MLP
     num_neurons:
       - ${model.num_hypervariables}
+      - 8
+      - 32
       - 64
-      - 128
-      - 256
-      - 512
     activation_functions:
       _target_: models.get_tanh
     rngs:
@@ -27,7 +26,7 @@ hyper_block:
 # PROJECTION HEAD FOR FIRST KERNEL
 proj_block_first_kernel:
   _target_: models.SirenHead
-  in_features: 512
+  in_features: 64
   input: latent_features
   output: weights_first_kernel
   mode: kernel
@@ -39,7 +38,7 @@ proj_block_first_kernel:
 # PROJECTION HEAD FOR OTHER KERNELS
 proj_block_other_kernels:
   _target_: models.SirenHead
-  in_features: 512
+  in_features: 64
   input: latent_features
   output: weights_other_kernels
   mode: kernel
@@ -51,7 +50,7 @@ proj_block_other_kernels:
 # PROJECTION HEAD FOR FIRST LAYER BIASES
 proj_block_first_biases:
   _target_: models.SirenHead
-  in_features: 512
+  in_features: 64
   input: latent_features
   output: first_layer_biases
   mode: bias
@@ -63,7 +62,7 @@ proj_block_first_biases:
 # PROJECTION HEAD FOR OTHER LAYER BIASES
 proj_block_other_biases:
   _target_: models.SirenHead
-  in_features: 512
+  in_features: 64
   input: latent_features
   output: other_layer_biases
   mode: bias
@@ -104,7 +103,6 @@ target_other_layers:
     w0_other: 30.0
     num_neurons:
       - 16
-      - 32
       - 16
       - ${model.num_output_variables}
     rngs:
