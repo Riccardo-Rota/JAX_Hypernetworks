@@ -71,3 +71,34 @@ or the one of the training function, by running
 
 Then to visualize the log run 
 `tail -F <path_to_log>`
+
+
+
+
+## Run locally with uv environment
+
+1. Create the virtual environment:
+```bash
+    uv venv jax_hypernetworks --python 3.12.3
+```
+
+2. Activate it:
+```bash
+    source jax_hypernetworks/bin/activate
+```
+
+3. Install packages:
+```bash
+    uv pip install -r requirements.txt
+```
+
+## NOTE: XLA autotuning warnings
+
+When running on GPU you may see repeated lines like:
+```
+W external/xla/.../dot_search_space.cc:200] All configs were filtered out because none of them
+sufficiently match the hints. ... Working around this by using the full hints set instead.
+```
+**These are warnings, not errors** — the run is fine. The warning is only about how XLA chose the kernel and it happens only once, during compilation. It depends on your GPU and JAX version, so it may not show up on every machine.
+
+To silence them, set `TF_CPP_MIN_LOG_LEVEL=2` before launching.
