@@ -3,7 +3,12 @@ ENGINE ?= venv
 USE_GPU ?= false
 OVERRIDES ?= 
 
-.PHONY: run-local submit-cluster sync-cluster run-test1 run-test2 run-test3 run-test4 run-test5 run-test6 run-test7
+.PHONY: load-data run-local submit-cluster sync-cluster run-test1 run-test2 run-test3 run-test4 run-test5 run-test6 run-test7
+
+load-data:
+	@echo "Downloading data..."
+	uv run python data_processing/download_data.py
+	uv run python data_processing/preprocessing.py
 
 run-local:
 	@echo "Running locally with $(ENGINE) (GPU: $(USE_GPU))..."
