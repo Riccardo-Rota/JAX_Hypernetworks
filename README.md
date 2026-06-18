@@ -30,7 +30,9 @@ Both experiments run with the same underlying code. This flexibility is mainly p
 A **hypernetwork** is a neural network whose output is the set of weights of a second network, the
 **target network**. In this library the data flow is always the same:
 
-![Diagram Description](./assets/SIREN_hypernetwork.png)
+<p align="center">
+  <img src="./assets/SIREN_hypernetwork.png" alt="Diagram Description" />
+</p>
 
 - **Hypervariables (`z`)** are the parameters given as inputs to the *hypernetwork*.
 - **Variables (`x`)** are the parameters given as inputs to the *target network*.
