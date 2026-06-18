@@ -16,7 +16,9 @@ RUN pip install --default-timeout=1000 --no-cache-dir -r requirements.txt
 
 # Copy your project's "library" code into the image
 # We explicitly copy directories to exclude `main.py` and `config/`
+COPY checkpoints /app/checkpoints/
 COPY data_processing /app/data_processing/
+COPY datasets /app/datasets/
 COPY inference /app/inference/
 COPY losses /app/losses/
 COPY metrics /app/metrics/
@@ -24,7 +26,6 @@ COPY models /app/models/
 COPY postprocessing /app/postprocessing/
 COPY training /app/training/
 COPY utils /app/utils/
-COPY datasets /app/datasets/
 
 # Add the project root to PYTHONPATH. This allows Python to find your modules.
 ENV PYTHONPATH="/app"
