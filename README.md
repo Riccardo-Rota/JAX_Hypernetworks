@@ -351,7 +351,9 @@ RESULTS_DIR=results/runs_turbulence make sync-cluster
 
 ---
 
-## 9. Running on an HPC cluster (ONLY FOR USERS FROM POLITECNICO DI MILANO)
+## 9. Running on an HPC cluster
+
+> This section concerns Politecnico di Milano cluster. If you do not have access to it, you can skip the reading.
 
 For long or GPU-heavy jobs, the library runs on an HPC cluster via **apptainer** (an open-source container platform
 designed to run on HPC systems) and the **PBS** scheduler.
