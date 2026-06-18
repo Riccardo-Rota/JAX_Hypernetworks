@@ -1,9 +1,9 @@
 # Default Variables
 ENGINE ?= venv
-USE_GPU ?= true
+USE_GPU ?= false
 OVERRIDES ?= 
 
-.PHONY: run-local submit-cluster sync-cluster run-test1 run-test2 run-test3 run-test4 run-test5 run-test5-bis run-test6 run-test7
+.PHONY: run-local submit-cluster sync-cluster run-test1 run-test2 run-test3 run-test4 run-test5 run-test6 run-test7
 
 run-local:
 	@echo "Running locally with $(ENGINE) (GPU: $(USE_GPU))..."
@@ -50,12 +50,7 @@ run-test4:
 
 run-test5:
 	@echo "=== Compare training speed with and without jit compilation ==="
-	ENGINE=$(ENGINE) USE_GPU=$(USE_GPU) bash scripts/jit_comparison.sh
-
-run-test5-bis:
-	@echo "=== JIT vs no-JIT micro-benchmark (train_step on mock data) ==="
-	python scripts/jit_benchmark.py
-
+	ENGINE=$(ENGINE) bash scripts/jit_comparison.sh
 
 run-test6:
 	@echo "=== Load a pre-trained model for turbulence and inspect results ==="
