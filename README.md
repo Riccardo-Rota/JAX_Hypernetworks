@@ -1,25 +1,19 @@
 # JAX Hypernetworks
 
-A research-oriented library, built on **JAX** and **Flax NNX**, for learning *parametric families* of
-functions with **hypernetworks**. Instead of training one neural network to approximate a single
-function, we train a network that *generates the weights* of another network on the fly, conditioned on
-a set of parameters. This is particularly powerful for scientific computing, where one is often
-interested not in a single solution, but in how a solution evolves as physical parameters change.
+This is a library built on **JAX** and **Flax NNX**, implemented to create a new general framework for **hypernetworks**. Instead of training one neural network to approximate a single function, we train a network that *generates the weights* of another network on the fly, conditioned on a set of parameters, called *hypervariables*. This is particularly powerful for scientific computing, where one is often interested not in a single solution, but in how a solution evolves as physical parameters change.
 
-The library ships with two self-contained problems that share the exact same code path:
+The library is validated on two problems of increasing complexity:
 
-- **`toy`** — regression of analytic, parameter-dependent functions (e.g. `theta[0]*x + exp(-theta[1]*x) + sin(theta[2]*pi*x)`). Cheap to run on a laptop CPU, ideal to understand the method.
+- **`toy`** — regression of analytic, parameter-dependent functions (e.g. `theta[0]*x + exp(-theta[1]*x) + sin(theta[2]*pi*x)`). Computationally soft to run on a laptop CPU, ideal to understand the method.
 - **`turbulence`** — reconstruction of 2D fields from the *turbulent radiative layer* dataset (astrophysical turbulence), conditioned on time. A realistic, GPU-friendly workload.
 
-Everything (model topology, data source, optimizer, losses, metrics, post-processing) is declared in
-**Hydra** configuration files, so experiments are reproducible and can be reshaped from the command
-line without touching a single line of Python.
+Both experiments run with the same underlying code. This flexibility is mainly provided by the fact that everything (model topology, data source, optimizer, losses, metrics, post-processing) is declared in **Hydra** configuration files, so experiments are reproducible and can be reshaped from the command line without editing the source code.
 
 ---
 
 ## Table of Contents
 
-1. [The idea in a nutshell](#1-the-idea-in-a-nutshell)
+1. [General Idea](#1-general-idea)
 2. [Repository structure](#2-repository-structure)
 3. [The power of Hydra](#3-the-power-of-hydra)
 4. [How to run code and tests](#4-how-to-run-code-and-tests)
@@ -32,7 +26,7 @@ line without touching a single line of Python.
 
 ---
 
-## 1. The idea in a nutshell
+## 1. General Idea
 
 A **hypernetwork** is a neural network whose output is the set of weights of a second network, the
 **target network**. In this library the data flow is always the same:
