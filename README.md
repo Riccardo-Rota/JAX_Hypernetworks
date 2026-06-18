@@ -1,4 +1,106 @@
-# PACSproject TODO for replication
+
+
+
+
+
+
+
+
+
+# How to run code and tests
+
+To use our library and test the results, we provide two alternatives: one using local uv environment, one using a Docker Image.
+
+## Option A: run locally using uv environment
+
+1. Clone the repository:
+```bash
+    git clone git@github.com:Riccardo-Rota/JAX_Hypernetworks.git
+```
+
+2. Move inside repository root folder:
+```bash
+    cd JAX_Hypernetworks
+```
+
+3. Create virtual with uv:
+```bash
+    uv venv jax_hypernetworks --python 3.12.3
+```
+
+2. Activate it:
+```bash
+    source jax_hypernetworks/bin/activate
+```
+
+3. Install packages:
+```bash
+    uv pip install -r requirements.txt
+```
+
+4. Load astrophysical turbulence datasets from Hugging Face and perform preprocessing using provided preprocessing scripts:
+```bash
+    make load-data
+```
+
+5. Download pre-trained model checkpoints directly from our v1.0.0 release on GitHub:
+```bash
+    wget https://github.com/Riccardo-Rota/JAX_Hypernetworks/releases/download/v1.0.0/checkpoints.zip
+    unzip checkpoints.zip
+    rm checkpoints.zip
+```
+
+6. Set ENGINE environmental variable to venv:
+```bash
+    export ENGINE="venv"
+```
+
+6.  **Run the Code**:
+You can now run code and provided tests using the `Makefile`.
+
+**TODO:** write what each test means
+**TODO:** explain how to use for general purposes (talk about GPU warning)
+**TODO:** talk about W&B if you want to put it on true
+
+```bash
+    make run-local
+```
+
+## Option B: run with Docker Image
+
+1. Clone the repository:
+```bash
+    git clone git@github.com:Riccardo-Rota/JAX_Hypernetworks.git
+```
+
+2. Move inside repository root folder:
+```bash
+    cd JAX_Hypernetworks
+```
+
+3. Pull Docker Image
+```bash
+    docker pull leonardobocchieri/jax-hypernetworks:latest
+```
+
+4. Set ENGINE environmental variable to docker:
+```bash
+    export ENGINE="docker"
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 1. Install Docker Desktop and open the Docker Desktop. Check if Docker is ready with:
 ```

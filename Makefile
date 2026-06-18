@@ -7,8 +7,8 @@ OVERRIDES ?=
 
 load-data:
 	@echo "Downloading data..."
-	uv run python data_processing/download_data.py
-	uv run python data_processing/preprocessing.py
+	python data_processing/download_data.py
+	python data_processing/preprocessing.py
 
 run-local:
 	@echo "Running locally with $(ENGINE) (GPU: $(USE_GPU))..."
@@ -59,7 +59,7 @@ run-test5:
 
 run-test6:
 	@echo "=== Load a pre-trained model for turbulence and inspect results ==="
-	$(MAKE) run-local OVERRIDES="problem=turbulence model=turbulence_mlp train_model=false checkpoint='checkpoints/velocity_mlp' data_source.base_dataset.target_keys=['velocity_x', 'velocity_y'] hydra.run.dir='results/test6'"
+	$(MAKE) run-local OVERRIDES="problem=turbulence model=turbulence_mlp train_model=false checkpoint='checkpoints/velocity_mlp' hydra.run.dir='results/test6'"
 
 run-test7:
 	@echo "=== Load a pre-trained model for turbulence and inspect results ==="
