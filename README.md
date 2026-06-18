@@ -105,18 +105,6 @@ Both are driven by the same `Makefile`, the only difference is the value of the 
 * **Docker Image:** Recommended for immediate reproduction. It arrives fully self-contained with all required datasets and model checkpoints pre-installed. No external setup or downloads are required.
 * **Local Setup:** Requires you to manually load and place the datasets and checkpoints before running execution commands, as the local clone only contains the source code. This happens because hosting large binaries in Git violates repository best practices
 
-### CPU / GPU flag
-
-The execution device is selected with the `USE_GPU` flag of the `Makefile` (`true` / `false`, default
-`false`). JAX is installed with CUDA 12 support.
-
-- If you set `USE_GPU=true` but no NVIDIA driver/hardware is detected, `run_experiment.sh` prints a
-  hardware warning and **safely reverts to CPU**.
-- Independently, `main.py` sets `JAX_PLATFORMS=cpu` whenever no GPU device is visible, so JAX itself
-  never errors out.
-
-The toy problem is small and is best run on CPU, while the turbulence problem benefits from a GPU.
-
 ### Option A: run locally using a `uv` environment
 
 > **NOTE:** we use `uv`, but a plain `python -m venv` works just as well.
@@ -166,7 +154,7 @@ The toy problem is small and is best run on CPU, while the turbulence problem be
    export ENGINE="venv"
    ```
 
-9. **Run the code.** You can now run experiments and the provided tests through the `Makefile`:
+9. **Run the code.** You can now run experiments and the provided tests through the `Makefile`.
    To run the provided tests, see section [§5](#5-how-to-run-tests), while for general usage go to [§6](#6-general-usage).
 
 ### Option B: run with the Docker image
@@ -195,7 +183,7 @@ yourself.
    export ENGINE="docker"
    ```
 
-5. **Run the code.** You can now run experiments and the provided tests through the `Makefile`:
+5. **Run the code.** You can now run experiments and the provided tests through the `Makefile`.
    To run the provided tests, see section [§5](#5-how-to-run-tests), while for general usage go to [§6](#6-general-usage).
 
 > **How the Docker engine works: what is baked in vs. mounted.** The image *contains* the
@@ -207,11 +195,24 @@ yourself.
 
 > **Ownership note.** Files created from inside the container belong to `root` (specifically, the `results/` folder). If you later run locally and hit a permission error, reclaim ownership with `sudo chown -R $(whoami) results`.
 
+
+### CPU / GPU flag
+
+The execution device is selected with the `USE_GPU` flag of the `Makefile` (`true` / `false`, default
+`false`). JAX is installed with CUDA 12 support.
+
+- If you set `USE_GPU=true` but no NVIDIA driver/hardware is detected, `run_experiment.sh` prints a
+  hardware warning and **safely reverts to CPU**.
+- Independently, `main.py` sets `JAX_PLATFORMS=cpu` whenever no GPU device is visible, so JAX itself
+  never errors out.
+
+The toy problem is small and is best run on CPU, while the turbulence problem benefits from a GPU.
+
 ---
 
 ## 5. How to run tests
 
-> Before proceeding, follow instructions in section [§4](#5-setup)
+> Before proceeding, follow instructions in section [§4](#4-setup)
 
 The `Makefile` provides a sequence of **experimental tests** that shows the library capabilities. Each writes its output under a dedicated `results/...` directory.
 
@@ -221,7 +222,7 @@ The `Makefile` provides a sequence of **experimental tests** that shows the libr
 | **`make run-test2`** | **(TOY) Training from scratch: the SIREN initialization matters.** Trains a *naive* SIREN (poor initialization → poor fit), then a properly-initialized SIREN. This illustrates why SIREN's weight scheme is essential for high-frequency targets. |
 | **`make run-test3`** | **(TOY) Fine-tuning a checkpoint.** First loads a deliberately under-trained checkpoint (poor results), then resumes training (`train_model=true`) from those same weights to show the model recovering. |
 | **`make run-test4`** | **(TOY) A challenging target.** Trains a SIREN on a high-frequency sine wave (`toy_function=highfreq_sine`). This illustrates how SIREN architectures perform well on high-frequency signals. |
-| **`make run-test5`** | **(PERFORMANCE) JIT vs. no-JIT.** Runs the same short training twice — with and without JAX JIT compilation (`JAX_DISABLE_JIT=1`) — on CPU and prints the measured speed-up. |
+| **`make run-test5`** | **(PERFORMANCE) JIT vs. no-JIT.** Runs the same short training twice on CPU (with and without JAX JIT compilation) and prints the measured speed-up. |
 | **`make run-test6`** | **(TURBULENCE) Inference with MLPs.** Loads a pre-trained turbulence MLP and reconstructs the velocity fields, comparing prediction against ground truth. *Requires the turbulence dataset (`make load-data`).* |
 | **`make run-test7`** | **(TURBULENCE) Inference with SIRENs.** Same as test 6 but with a SIREN target on the *density* field. *Requires the turbulence dataset (`make load-data`).* |
 
@@ -370,18 +371,7 @@ designed to run on HPC systems) and the **PBS** scheduler.
    make submit-cluster USE_GPU=true OVERRIDES="problem=turbulence use_wandb=true training.epochs=500"
    ```
 
-For other relevant informations, consult the student cluster guidelines on Webeep.
-
-### Watching logs live on the cluster
-
-To follow a run's progress, find the path of the log being written and tail it:
-
-```bash
-ls results/runs_*/*/*/default.log        # Hydra/run log
-ls results/runs_*/*/*/training_log.txt   # per-epoch training log
-
-tail -F <path_to_log>
-```
+For other relevant information, consult the student cluster guidelines on Webeep.
 
 ---
 
