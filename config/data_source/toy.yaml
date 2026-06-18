@@ -1,31 +1,29 @@
-# For initializing train,val,test all here: define the shared properties using an anchor
-base_toy: &base_toy
+base_toy:
   _target_: data_processing.ToyDataSource
-  f:
-    _target_: utils.get_function_from_string
-    f_string: "theta[0]*x[0] + exp(-theta[1]*x[0]) + sin(theta[2]*pi*x[0])"
-  hyper_domains:
-    - [-2, 2]
-    - [0, 1]
-    - [-2, 2]
-  var_domains:
-    - [-1, 1]
-
-# Define explicit splits that inherit the base properties (<<: *base_toy)
+  
 train:
-  <<: *base_toy
+  _target_: data_processing.ToyDataSource
+  f: ${data_source.base_toy.f}
+  hyper_domains: ${data_source.base_toy.hyper_domains}
+  var_domains: ${data_source.base_toy.var_domains}
   N: 10000
   n_realizations: 1
   seed: ${seed}
 
 val:
-  <<: *base_toy
+  _target_: data_processing.ToyDataSource
+  f: ${data_source.base_toy.f}
+  hyper_domains: ${data_source.base_toy.hyper_domains}
+  var_domains: ${data_source.base_toy.var_domains}
   N: ${int_product:${data_source.train.N},0.2}
   n_realizations: ${data_source.train.n_realizations}
   seed: ${sum:[${seed},1]}
 
 test:
-  <<: *base_toy
+  _target_: data_processing.ToyDataSource
+  f: ${data_source.base_toy.f}
+  hyper_domains: ${data_source.base_toy.hyper_domains}
+  var_domains: ${data_source.base_toy.var_domains}
   N: ${int_product:${data_source.train.N},0.2}
   n_realizations: ${data_source.train.n_realizations}
   seed: ${sum:[${seed},2]}

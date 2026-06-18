@@ -7,6 +7,9 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 IMAGE_NAME="leonardobocchieri/jax-hypernetworks:latest"
 
+# Execution engine: "venv" (local uv/virtualenv) or "docker". Mirrors run_experiment.sh.
+ENGINE="${ENGINE:-docker}"
+
 # Total number of epochs for the "full" run. The first epoch is timed separately
 # (via a dedicated 1-epoch run) so we can isolate the one-time XLA compilation of
 # the jitted version from the steady-state per-epoch cost. Must be >= 2.
@@ -21,33 +24,59 @@ if [ "$EPOCHS" -lt 2 ]; then
     exit 1
 fi
 
+# When running locally, warn if no virtual environment is active (same logic as run_experiment.sh)
+if [ "$ENGINE" = "venv" ]; then
+    echo "[Environment] Checking for local Python venv..."
+    if ! command -v python &> /dev/null || ! python -c "import sys; assert sys.prefix != sys.base_prefix" &> /dev/null; then
+        echo "⚠️  [Environment Warning] Not running in an active Python virtual environment."
+        echo "⚠️  Please create/activate your uv venv and install dependencies from requirements.txt."
+    fi
+fi
+
 # Clean up previous results to ensure a fresh run
 echo "Cleaning up old results..."
 rm -rf "$PROJECT_ROOT/results/jit_comparison"
 
 # -----------------------------------------------------------------------------
 # run_case <mode: jitted|non_jitted> <epochs> <subdir>
-# Runs one training inside the container (forced on CPU, no plots) with the right
-# JIT setting and writes its results under results/jit_comparison/<mode>/<subdir>.
+# Runs one training (forced on CPU, no plots) with the right JIT setting and writes
+# its results under results/jit_comparison/<mode>/<subdir>. Honours ENGINE (venv|docker).
 # -----------------------------------------------------------------------------
 run_case() {
     local mode="$1"
     local epochs="$2"
     local subdir="$3"
-    local out_container="results/jit_comparison/${mode}/${subdir}"
-
-    local env_flags=(-e JAX_PLATFORMS=cpu) # force CPU even if a GPU is present
-    if [ "$mode" = "non_jitted" ]; then
-        env_flags+=(-e JAX_DISABLE_JIT=1)  # turn jax.jit (and nnx.jit) into no-ops
-    fi
+    local out="results/jit_comparison/${mode}/${subdir}"
+    local overrides="problem=toy postprocessing=none use_wandb=False training.epochs=$epochs hydra.run.dir=$out"
 
     echo ""
-    echo ">>> Running ${mode} (${epochs} epoch(s), CPU)..."
-    docker run --rm "${env_flags[@]}" \
-      -v "$PROJECT_ROOT:/app" \
-      -w /app \
-      "$IMAGE_NAME" \
-      bash -c "python main.py problem=toy postprocessing=none use_wandb=False training.epochs=$epochs hydra.run.dir=$out_container"
+    echo ">>> Running ${mode} (${epochs} epoch(s), CPU, engine=${ENGINE})..."
+
+    case "$ENGINE" in
+      docker)
+        local env_flags=(-e JAX_PLATFORMS=cpu)     # force CPU even if a GPU is present
+        if [ "$mode" = "non_jitted" ]; then
+            env_flags+=(-e JAX_DISABLE_JIT=1)      # turn jax.jit (and nnx.jit) into no-ops
+        fi
+        docker run --rm "${env_flags[@]}" \
+          -v "$PROJECT_ROOT:/app" \
+          -w /app \
+          "$IMAGE_NAME" \
+          bash -c "python main.py $overrides"
+        ;;
+      venv)
+        local jit_env=()
+        if [ "$mode" = "non_jitted" ]; then
+            jit_env=(JAX_DISABLE_JIT=1)            # turn jax.jit (and nnx.jit) into no-ops
+        fi
+        # force CPU and run with the active local interpreter (same as run_experiment.sh venv)
+        ( cd "$PROJECT_ROOT" && env JAX_PLATFORMS=cpu "${jit_env[@]}" python main.py $overrides )
+        ;;
+      *)
+        echo "Error: unsupported ENGINE='$ENGINE' (use ENGINE=venv or ENGINE=docker)."
+        exit 1
+        ;;
+    esac
 }
 
 # -----------------------------------------------------------------------------

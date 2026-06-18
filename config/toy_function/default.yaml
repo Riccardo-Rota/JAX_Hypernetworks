@@ -1,0 +1,17 @@
+# @package data_source.base_toy
+
+f:
+  _target_: utils.get_function_from_string
+  f_string: "theta[0]*x[0] + exp(-theta[1]*x[0]) + sin(theta[2]*pi*x[0])"
+hyper_domains:
+  - [-2, 2]
+  - [0, 1]
+  - [-2, 2]
+var_domains:
+  - [-1, 1]
+# Hyper-variable samples for the inference plots (each must have len == #hyper_domains)
+hypervars_set:
+  - [0.5, 0.5, 0.5]
+  - [1.0, 0.5, 1.0]
+  - [-1.0, 0.5, -1.0]
+  - [-0.5, 1.0, 2.0]

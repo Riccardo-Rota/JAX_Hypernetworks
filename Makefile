@@ -3,7 +3,7 @@ ENGINE ?= venv
 USE_GPU ?= true
 OVERRIDES ?= 
 
-.PHONY: run-local submit-cluster sync-cluster run-test1 run-test2
+.PHONY: run-local submit-cluster sync-cluster run-test1 run-test2 run-test3 run-test4 run-test5 run-test5-bis run-test6 run-test7
 
 run-local:
 	@echo "Running locally with $(ENGINE) (GPU: $(USE_GPU))..."
@@ -33,9 +33,9 @@ run-test1:
 	$(MAKE) run-local OVERRIDES="problem=toy model=toy_mlp train_model=false checkpoint='checkpoints/toy_mlp' hydra.run.dir='results/test1'"
 
 run-test2:
-	@echo "=== Load a pre-trained model which performs poorly, inspect results ==="
+	@echo "=== Train a naive SIREN from scratch (performs poorly), inspect results ==="
 	$(MAKE) run-local OVERRIDES="problem=toy model=toy_siren_naive training.epochs=200 hydra.run.dir='results/test2_naive'"
-	@echo "=== Load a pre-trained model which performs poorly, inspect results ==="
+	@echo "=== Train a SIREN from scratch (performs better), inspect results ==="
 	$(MAKE) run-local OVERRIDES="problem=toy model=toy_siren training.epochs=200 hydra.run.dir='results/test2_siren'"
 
 run-test3:
@@ -46,4 +46,21 @@ run-test3:
 
 run-test4:
 	@echo "=== Run with a challenging function: high-frequency sine wave ==="
-	$(MAKE) run-local OVERRIDES="problem=toy model=toy_siren training.epochs=200 data_source.base_toy.f.fstring='sin(theta*pi*x)' data_source.base_toy.hyper_domains=[-5,5] hydra.run.dir='results/test4'"
+	$(MAKE) run-local OVERRIDES="problem=toy model=toy_siren training.epochs=200 toy_function=highfreq_sine hydra.run.dir='results/test4'"
+
+run-test5:
+	@echo "=== Compare training speed with and without jit compilation ==="
+	ENGINE=$(ENGINE) USE_GPU=$(USE_GPU) bash scripts/jit_comparison.sh
+
+run-test5-bis:
+	@echo "=== JIT vs no-JIT micro-benchmark (train_step on mock data) ==="
+	python scripts/jit_benchmark.py
+
+
+run-test6:
+	@echo "=== Load a pre-trained model for turbulence and inspect results ==="
+	$(MAKE) run-local OVERRIDES="problem=turbulence model=turbulence_mlp train_model=false checkpoint='checkpoints/velocity_mlp' data_source.base_dataset.target_keys=['velocity_x', 'velocity_y'] hydra.run.dir='results/test6'"
+
+run-test7:
+	@echo "=== Load a pre-trained model for turbulence and inspect results ==="
+	$(MAKE) run-local OVERRIDES="problem=turbulence model=turbulence_siren train_model=false checkpoint='checkpoints/density_siren' data_source.base_dataset.target_keys=['density'] hydra.run.dir='results/test7'"
