@@ -43,14 +43,16 @@ class NeuralNetwork(nnx.Module):
     """
     Base class for Neural Networks managed by HypernetworkManager.
     Each network can have a mapping of its inputs and outputs to object keys, which are used by the manager to route data between blocks.
-    Args:
+    """
+    def __init__(self, network: Optional[nnx.Module], input: Optional[Union[str, Dict[str, str], List[Union[str, Dict[str, str]]]]] = None, output: Optional[Union[List[str], str]] = None):
+        """
+        Args:
         network: nnx.Module representing the neural network architecture.
         input: mapping of objects to be passed as input to the network.
             If objects are provided as strings, they will be passed as positional arguments
             If objects are provided as dict, they will be passed as keyword arguments, with the dict key being the argument keyword
         output: list of object keys or single object key that the network outputs. The order of the list should match the order of the outputs produced by the network's forward pass.
-    """
-    def __init__(self, network: Optional[nnx.Module], input: Optional[Union[str, Dict[str, str], List[Union[str, Dict[str, str]]]]] = None, output: Optional[Union[List[str], str]] = None):
+        """
         self.network = network
         self.input_args, self.input_kwargs = self._get_input(input)
         self.output = self._get_output(output)
@@ -102,7 +104,10 @@ class TargetNetwork(NeuralNetwork):
     TargetNetwork class that allows weights injection, based on a mapping provided at initialization.
     The weights are set to non-trainable variables, because they are meant to be optimized by a hypernetwork and not directly. 
     The extract_target_network method in the manager allows to extract the TargetNetwork with injected weights as a standalone nnx.Module, converting the weights back to trainable parameters for fine-tuning.
-    Args:
+    """
+    def __init__(self, network: nnx.Module, input:Optional[Union[str, Dict[str, str], List[Union[str, Dict[str, str]]]]] = None, output: Optional[Union[List[str], str]] = None, weights_mapping: Optional[Dict[Union[str, Tuple[str]], str]] = None, name: Optional[str] = None):
+        """
+        Args:
         network: nnx.Module representing the neural network architecture.
         input: mapping of objects to be passed as input to the network.
             If inputs are provided as strings, they will be passed as positional arguments
@@ -113,8 +118,7 @@ class TargetNetwork(NeuralNetwork):
             Use tuples as keys if a single object represents weights for multiple layers (the dimension of the object will be inferred as the cumulative number of parameters in the layers).
             Use single strings as keys to map each object to a layer.
         name: Optional name for the TargetNetwork block, used for identification when extracting the target network from the manager.
-    """
-    def __init__(self, network: nnx.Module, input:Optional[Union[str, Dict[str, str], List[Union[str, Dict[str, str]]]]] = None, output: Optional[Union[List[str], str]] = None, weights_mapping: Optional[Dict[Union[str, Tuple[str]], str]] = None, name: Optional[str] = None):
+        """
         super().__init__(network, input, output)
         self.weights_mapping = weights_mapping # mapping weight keys to the objects that will be injected in them
         self.name = name
@@ -341,13 +345,6 @@ class ProjectionHead(NeuralNetwork):
     """
     ProjectionHead class that generates weights for the TargetNetwork based on the output of the Hypernetwork, defined as a single linear layer.
     The head is instantiated only when build method is called, which allows to determine the output size based on the size of the weights it needs to generate.
-    Args:
-        in_features: number of input features for the linear layer. This should match the output size of the corresponding Hypernetwork.
-        input: Single input object key
-        output: Single output object key that this head generates
-        rngs: Optional nnx.Rngs for initializing the head weights. If not provided, a default rng will be used.
-        kernel_init: Optional weight initialization function for the linear layer kernel. Defaults to lecun_normal initializer.
-        bias_init: Optional weight initialization function for the linear layer bias. Defaults to zeros initializer.
     """
     def __init__(self, 
                  in_features: int, 
@@ -356,7 +353,15 @@ class ProjectionHead(NeuralNetwork):
                  rngs: Optional[nnx.Rngs] = None,
                  kernel_init: Callable = nnx.initializers.lecun_normal(),
                  bias_init: Callable = nnx.initializers.zeros_init()):
-        
+        """
+        Args:
+        in_features: number of input features for the linear layer. This should match the output size of the corresponding Hypernetwork.
+        input: Single input object key
+        output: Single output object key that this head generates
+        rngs: Optional nnx.Rngs for initializing the head weights. If not provided, a default rng will be used.
+        kernel_init: Optional weight initialization function for the linear layer kernel. Defaults to lecun_normal initializer.
+        bias_init: Optional weight initialization function for the linear layer bias. Defaults to zeros initializer.
+        """
         super().__init__(network=None, input=input, output=output)
         self.in_features = in_features
         self.rngs = rngs if rngs is not None else nnx.Rngs(0) 
@@ -390,7 +395,16 @@ class ProjectionHead(NeuralNetwork):
 
 
 class HypernetworkManager(nnx.Module):
+    """
+    HypernetworkManager class that manages the execution of multiple blocks (Hypernetworks, ProjectionHeads, TargetNetworks) in a directed acyclic graph (DAG) structure, based on their input and output dependencies.
+    The manager determines the execution order of the blocks, routes the data through them, and collects the final outputs based on the defined output keys.
+    """
     def __init__(self, blocks: List[NeuralNetwork], output: Union[List[str], str]):
+        """
+        Args:
+        blocks: List of NeuralNetwork blocks, including Hypernetworks, TargetNetworks, ProjectionHeads
+        output: list of output keys or single output key that the manager outputs. The order of the list should match the order of the outputs produced by the manager's forward pass.
+        """
         blocks = self._build_projection_heads(blocks) # initialize all the heads 
         self.blocks, self.external_inputs = self._determine_execution_order(blocks)
         self.output = [output] if isinstance(output, str) else output
