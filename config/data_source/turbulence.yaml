@@ -11,6 +11,7 @@ schema: &schema
 base_dataset: &base_dataset
   _target_: data_processing.InMemoryHDF5Source
   schema: *schema
+  # use variable names as in schema to specify which variables to use as hyperparameters, input variables, and target variables
   hypervar_keys: ["time"]
   var_keys: ["x", "y"]
   target_keys: ["velocity_x", "velocity_y"]
