@@ -9,8 +9,7 @@ from .activation_functions import uniform_init
 
 Dtype = Union[jax.typing.DTypeLike, Any]
 
-# TODO: CLEAN AND COMMENT
-
+# Define a dictionary of initializers for easy access
 initializers = {
     "lecun_normal": nnx.initializers.lecun_normal(),
     "lecun_uniform": nnx.initializers.lecun_uniform(),
@@ -21,44 +20,27 @@ initializers = {
     "close_to_zero": nnx.initializers.normal(stddev=1e-5)
 }
 
-def get_initializer(name):
+def get_initializer(name: str) -> Initializer:
+    """
+    Get an initializer by name.
+
+    Args:
+        name (str): The name of the initializer to retrieve.
+
+    Returns:
+        The requested initializer.
+    """
     if name in initializers:
         return initializers[name]
     else:
         raise ValueError(f"Initializer '{name}' not found. Available options: {list(initializers.keys())}")
 
 
-class FCNN(nnx.Module):
-    """
-    Fully connected neural network.
-    """
-
-    def __init__(self, 
-        num_neurons: List[int], 
-        *,
-        kernel_init: Initializer = nnx.initializers.lecun_normal(),
-        bias_init: Initializer = nnx.initializers.zeros_init(),
-        rngs: nnx.Rngs,
-        ):
-        if type(kernel_init) == str:
-            kernel_init = get_initializer(kernel_init)
-        self.layers = [
-            nnx.Linear(num_neurons[i], num_neurons[i+1], rngs=rngs, kernel_init = kernel_init, bias_init = bias_init)
-            for i in range(len(num_neurons) - 1)]
-
-    def __call__(self, x):
-        for i_lay, lay in enumerate(self.layers):
-            x = lay(x)
-            if i_lay < len(self.layers) - 1:
-                x = jnp.tanh(x)
-        return x
-
-    # ASK REGAZZONI ABOUT THIS FUNCTION
-    # def get_RMS_kernels(self):
-    #     kernels = [jnp.square(lay.kernel.value) for lay in self.layers]
-    #     return utils.global_average(kernels)
-
 class SirenLayer(nnx.Module):
+    """
+    Single layer of a Siren network, consisting of a linear transformation followed by a sine activation function.
+    The weights are initialized according to the Siren paper.
+    """
     
     def __init__(self,
         in_features: int,
@@ -70,6 +52,18 @@ class SirenLayer(nnx.Module):
         kernel_init_first: bool = False,
         rngs: nnx.Rngs,
         ):
+        """
+        Initialize the SirenLayer.
+
+        Args:
+            in_features (int): Number of input features.
+            out_features (int): Number of output features.
+            use_bias (bool): Whether to include a bias term.
+            use_activation (bool): Whether to apply the sine activation function.
+            w0 (float): The frequency factor for the sine activation function.
+            kernel_init_first (bool): Whether to use the first layer initialization for the kernel.
+            rngs (nnx.Rngs): The random number generator state.
+        """
 
         self.use_bias = use_bias
         self.use_activation = use_activation
@@ -90,23 +84,34 @@ class SirenLayer(nnx.Module):
         else:
             self.bias = nnx.Param(None)
 
-    def apply_linear(self, inputs):
+    def apply_linear(self, inputs: jnp.ndarray) -> jnp.ndarray:
+        """
+        Apply the linear transformation of the layer.
+        
+        Args:
+            inputs (jnp.ndarray): The input tensor of shape (batch_size, in_features).
+        Returns:
+            The output tensor of shape (batch_size, out_features) after applying the linear transformation.
+        """
         y = inputs @ self.kernel
 
         if self.use_bias:
             y = y + self.bias
         return y
 
-    def activation(self, inputs):
+    def activation(self, inputs: jnp.ndarray) -> jnp.ndarray:
         return jnp.sin(self.w0 * inputs)
 
-    def __call__(self, inputs):
+    def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
         y = self.apply_linear(inputs)
         if self.use_activation:
             y = self.activation(y)
         return y
         
 class Siren(nnx.Module):
+    """
+    A Siren network consisting of multiple Siren layers. The weights of each layer are initialized according to the Siren paper.
+    """
     def __init__(self, 
         num_neurons: List[int], 
         *,
@@ -115,6 +120,15 @@ class Siren(nnx.Module):
         w0_other: float = 30,
         rngs: nnx.Rngs
         ):
+        """
+        Initialize the Siren network.
+        Args:
+            num_neurons (List[int]): A list specifying the number of neurons in each layer.
+            w0_first (float): The frequency factor for the sine activation function in the first layer.
+            w0_last (float): The frequency factor for the sine activation function in the last layer
+            w0_other (float): The frequency factor for the sine activation function in the intermediate layers.
+            rngs (nnx.Rngs): The random number generator state.
+        """
         
         self.layers = list()
         for i_layer in range(len(num_neurons)-1):
@@ -134,23 +148,23 @@ class Siren(nnx.Module):
                 kernel_init_first = i_layer == 0,
                 rngs = rngs))
 
-    def __call__(self, x):
+    def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
         for lay in self.layers:
             x = lay(x)
         return x
     
     def num_parameters(self):
+        """
+        Calculate the total number of parameters in the Siren network.
+            Returns:
+            int: The total number of parameters in the network.
+        """
         total_params = 0
         for lay in self.layers:
             total_params += lay.kernel.value.size
             if lay.use_bias:
                 total_params += lay.bias.value.size
         return total_params
-    
-# Briefly: Siren is a basic FCNN with:
-# - sinusoidal activation functions taken after a rescaling (line 103)
-# - weights initialized from uniform [-1,1] amd rescaled with a specific formula (line 78 for 1st layer, line 80 for others)
-# bias initialized with zeros (nothing special, but I say it for the sake of completeness)
 
 SirenInitMode = Literal['first_kernel', 'kernel', 'bias']
 
@@ -168,6 +182,17 @@ class SirenHead(ProjectionHead):
                  siren_in_features: Optional[int] = None,
                  w0: float = 30.0
                  ):
+        """
+        Initialize the SirenHead.
+        Args:
+            in_features (int): Number of input features.
+            input (Optional[List[Union[str, Dict[str, str]]]]): Input specification for the hypernetwork.
+            output (str): Output specification for the hypernetwork.
+            rngs (Optional[nnx.Rngs]): Random number generator state.
+            mode (SirenInitMode): Mode for initializing the Siren weights. Can be 'first_kernel', 'kernel', or 'bias'.
+            siren_in_features (Optional[int]): Number of input features for the Siren layer. Required for 'first_kernel' and 'kernel' modes.
+            w0 (float): Frequency factor for the sine activation function. Required for 'kernel' mode.
+        """
         kernel_init = nnx.initializers.normal(stddev=1e-5)
         if mode == 'first_kernel':
             if siren_in_features is None:
