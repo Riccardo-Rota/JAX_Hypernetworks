@@ -564,6 +564,15 @@ class HypernetworkManager(nnx.Module):
         for i, target_block in enumerate(target_networks): # inject weights and unfeeze them to make them trainable
             required_objects = set(target_block.weights_mapping.values()) if target_block.weights_mapping is not None else set()
             weights = {object_key: objects[object_key] for object_key in required_objects}
+            # A standalone target network must have a single set of (unbatched) weights. Batched
+            # weights (produced from batched hypervariable input) would create params with a leading
+            # batch dimension that do not form a usable network, so reject them with a clear error.
+            batched = {object_key: w.shape for object_key, w in weights.items() if getattr(w, "ndim", 1) > 1}
+            if batched:
+                raise ValueError(
+                    "extract_target_network expects a single (unbatched) hypervariable configuration, "
+                    f"but the generated weights are batched {batched}. Pass one configuration at a time."
+                )
             new_state = nnx.State(target_block._inject_weights(weights))
             unfrozen_state = jax.tree.map(
                 lambda v: nnx.Param(v.value) if isinstance(v, (TargetNetworkWeight, InjectedBatchedWeights, InjectedUnbatchedWeights)) else v,
