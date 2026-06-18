@@ -10,6 +10,7 @@ The library is validated on two problems of increasing complexity:
 Both experiments run with the same underlying code. This flexibility is mainly provided by the fact that everything (model topology, data source, optimizer, losses, metrics, post-processing) is declared in **Hydra** configuration files, so experiments are reproducible and can be reshaped from the command line without editing the source code.
 
 > IMPORTANT
+>
 > To replicate code and run tests, follow instructions from Section [§4](#4-setup), [§5](#5-how-to-run-tests) and [§6](#6-general-usage)
 
 ---
