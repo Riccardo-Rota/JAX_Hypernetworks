@@ -32,4 +32,3 @@ config/
 main.py
 scripts/
 Makefile
-requirements.txt
