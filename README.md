@@ -140,9 +140,9 @@ Both are driven by the same `Makefile`, the only difference is the value of the 
    The toy problem needs no download: its data is generated on the fly.
 
 7. *(Optional)* Download the pre-trained checkpoints used by the demonstration tests, from our
-   `v1.0.0` GitHub release:
+   `v1.0.2` GitHub release:
    ```bash
-   wget https://github.com/Riccardo-Rota/JAX_Hypernetworks/releases/download/v1.0.0/checkpoints.zip
+   wget https://github.com/Riccardo-Rota/JAX_Hypernetworks/releases/download/v1.0.2/checkpoints.zip
    unzip checkpoints.zip
    rm checkpoints.zip
    ```
