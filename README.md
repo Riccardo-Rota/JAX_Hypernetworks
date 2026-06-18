@@ -4,7 +4,7 @@ This is a library built on **JAX** and **Flax NNX**, implemented to create a new
 
 The library is validated on two problems of increasing complexity:
 
-- **`toy`** — regression of analytic, parameter-dependent functions (e.g. `theta[0]*x + exp(-theta[1]*x) + sin(theta[2]*pi*x)`). Computationally soft to run on a laptop CPU, ideal to understand the method.
+- **`toy`** — regression of analytic, parameter-dependent functions. Computationally soft to run on a laptop CPU, ideal to understand the method.
 - **`turbulence`** — reconstruction of 2D fields from the *turbulent radiative layer* dataset (astrophysical turbulence), conditioned on time. A realistic, GPU-friendly workload.
 
 Both experiments run with the same underlying code. This flexibility is mainly provided by the fact that everything (model topology, data source, optimizer, losses, metrics, post-processing) is declared in **Hydra** configuration files, so experiments are reproducible and can be reshaped from the command line without editing the source code.
@@ -15,8 +15,8 @@ Both experiments run with the same underlying code. This flexibility is mainly p
 
 1. [General Idea](#1-general-idea)
 2. [Repository structure](#2-repository-structure)
-3. [The power of Hydra](#3-the-power-of-hydra)
-4. [How to run code and tests](#4-how-to-run-code-and-tests)
+3. [Hydra](#3-hydra)
+4. [Reproducibility: How to run code and tests](#4-reproducibility-how-to-run-code-and-tests)
 5. [The guided tour: `make run-test*`](#5-the-guided-tour-make-run-test)
 6. [General usage](#6-general-usage)
 7. [Datasets](#7-datasets)
@@ -40,18 +40,15 @@ hypervariables (θ)  ──►  Hypernetwork  ──►  latent features
    variables (x)  ───────────────────────────────────────────►  Target network  ──►  output
 ```
 
-- **Hypervariables (`θ`)** are the parameters that *index the family* of functions (a physical
-  coefficient, the time of a simulation, the frequency of a sine wave, …).
-- **Variables (`x`)** are the coordinates at which the target function is evaluated (spatial position,
-  abscissa, …).
-- The **Hypernetwork** maps `θ` to a latent code; the **projection heads** expand that code into the
-  actual kernels and biases of the target network; the **target network** consumes `x` with those
-  generated weights and produces the prediction.
+- **Hypervariables (`θ`)** are the parameters given as inputs to the *hypernetwork*.
+- **Variables (`x`)** are the parameters given as inputs to the *target network*.
+- General pipeline:
+    1. The **Hypernetwork** maps `θ` to a latent code
+    2. The **projection heads** expand that code into the actual kernels and biases of the target network
+    3. The **target network** consumes `x` with those generated weights and produces the prediction.
 
 The whole assembly is described as a small **directed acyclic graph (DAG)** of *blocks* and orchestrated
-by the `HypernetworkManager`, which infers the execution order automatically. Two target families are
-provided out of the box: a plain **MLP** and a **SIREN** (sinusoidal representation network, well suited
-to high-frequency signals).
+by the `HypernetworkManager`, which infers the execution order automatically. We provide two different families of neural netwoek architectures: plain **MLPs** and a **SIRENs** (sinusoidal representation network, useful when dealing with high-frequency signals).
 
 ---
 
@@ -59,114 +56,67 @@ to high-frequency signals).
 
 | Folder | Purpose |
 | --- | --- |
-| **`models/`** | The neural building blocks. Defines `Hypernetwork`, `ProjectionHead`/`SirenHead` (the heads that turn latent codes into weights), `TargetNetwork` (the network whose weights are *injected* rather than trained directly), and the `HypernetworkManager` that wires the blocks into a DAG and routes tensors between them. Target architectures `MLP` and `Siren` (plus `SirenLayer` and activation getters such as `get_tanh`) also live here. |
-| **`training/`** | The training engine. `train_model` runs the full loop (epochs, early stopping, checkpointing, W&B logging, learning-rate tracking); `perform_step`/`perform_epoch` are the JIT-compiled inner steps. `hypernet_utils.py` contains the weight-injection machinery (`build_state_from_parameters`, `assign_parameters`, `apply`). |
-| **`inference/`** | `test_model` — a single evaluation pass over a test set returning the configured metrics. |
+| **`models/`** | The neural building blocks. Defines `Hypernetwork`, `ProjectionHead`/`SirenHead` (the heads that turn latent codes into weights), `TargetNetwork` (the network whose weights are *injected* rather than trained directly), and the `HypernetworkManager` that connect together all the blocks. Target architectures `MLP` and `Siren` are also implemented here. |
+| **`training/`** | The training engine, structured hierarchically like a Matryoshka doll. `train_model` drives the full execution, nesting `train_epoch` for individual epochs, which further nests `train_step` for single-batch execution (which is JIT-compiled). `hypernet_utils.py` manages the weight-injection mechanism (`build_state_from_parameters`, `assign_parameters`, `apply`). |
+| **`inference/`** | `test_model` — a single evaluation pass over a test set returning the required metrics. |
 | **`losses/`** | Composable loss functions: `L2Loss` (MSE), `LpLoss` (generic L-p norm) and `CombinedLoss` (a weighted sum of any of the above). |
-| **`metrics/`** | Flax-based streaming metrics: `MSE`, `RMSE`, `RRMSE` (relative RMSE) and `MAE`. |
-| **`data_processing/`** | Data sources and the input pipeline. `ToyDataSource` *generates* samples by evaluating a parametric function over its domains; `InMemoryHDF5Source` loads a preprocessed HDF5 dataset into RAM. `build_dataset` wraps them in a [Grain](https://github.com/google/grain) pipeline (shuffle/batch/iterate). `download_data.py` fetches the turbulence dataset from Hugging Face; `preprocessing.py` performs the temporal train/val/test split and normalization. |
+| **`metrics/`** | Flax-based streaming metrics: `MSE`, `RMSE`, `RRMSE` (relative RMSE) and `MAE`. For our results, we use RRMSE as most valuable performance metric. |
+| **`data_processing/`** | Dataset loading and construction. `ToyDataSource` *generates* samples by evaluating a parametric function over its domains; `InMemoryHDF5Source` loads a preprocessed HDF5 dataset into RAM. `build_dataset` wraps them in a Grain pipeline (shuffle/batch/iterate). For the turbulence problem, `download_data.py` fetches the dataset from Hugging Face, while `preprocessing.py` performs the temporal train/val/test split and normalization. |
 | **`postprocessing/`** | Plotting utilities: loss curves (`plot_loss_curves`), 1D/2D prediction plots, and `plot_2d_hdf5_comparison` (prediction vs. ground truth vs. error for the turbulence fields). |
-| **`utils/`** | Cross-cutting helpers. Most importantly the **custom Hydra resolvers** (`hydra_resolvers.py`), the safe math-expression parser `get_function_from_string` (used to define toy functions from strings), Orbax-based `save_model`/`load_model`, and learning-rate introspection. |
-| **`config/`** | The full Hydra configuration tree (see [§3](#3-the-power-of-hydra)). This is where experiments are actually defined. |
-| **`scripts/`** | Thin shell wrappers invoked by the `Makefile`: `run_experiment.sh` (engine dispatch: venv / Docker / apptainer), `load_data.sh`, `jit_comparison.sh`, `sync_wandb.sh`, and the PBS job script `submission.pbs`. |
+| **`utils/`** | General helpers. Most importantly the **custom Hydra resolvers** (`hydra_resolvers.py`), the safe math-expression parser `get_function_from_string` (used to define toy functions from strings), Orbax-based `save_model`/`load_model`, and learning-rate introspection. |
+| **`config/`** | The full Hydra configuration tree (see [§3](#3-hydra)). This is where experiment parameters and configurations are defined. |
+| **`scripts/`** | Thin shell wrappers invoked by the `Makefile`. They allow the code to run with venv environment, Docker Images or on a OpenPBS based cluster. |
 | **`checkpoints/`** | Pre-trained model weights (downloaded from the GitHub release) used by the demonstration tests. |
 | **`results/`** | Default output directory. Each run writes here its logs, `run_data.json`, figures and a snapshot of the resolved config under `.hydra/`. |
-| **`main.py`** | The single entry point. Reads the composed config, instantiates everything, and runs the requested phases (train / test / inference plots). |
+| **`main.py`** | The single entry point. Reads the composed config, instantiates everything and runs the requested phases (train / test / inference plots). |
 
 ---
 
-## 3. The power of Hydra
+## 3. Hydra
 
-[Hydra](https://hydra.cc) is the backbone of this project. The entire experiment — *which* model, *which*
-data, *which* optimizer, *which* losses — is assembled from small, composable YAML files in `config/`,
-and **any value can be overridden from the command line**. Nothing in `main.py` is hard-coded.
+Hydra is the tool allowing flexibility in this project. The entire experiment setup is assembled from small, composable YAML files in `config/` and **any value can be overridden from the command line**. Nothing in `main.py` is hard-coded.
 
 ### 3.1 Config groups
 
 ```
 config/
 ├── config.yaml              # root: defaults, seed, flags (train/test/plot), W&B settings
-├── problem/                 # toy.yaml | turbulence.yaml  → the master switch
-├── model/                   # toy_siren, toy_mlp, turbulence_siren, turbulence_mlp, ...
-├── data_source/             # toy.yaml | turbulence.yaml
-├── toy_function/            # default.yaml | highfreq_sine.yaml (analytic targets)
+├── problem/                 # toy or turbulence problem
+├── model/                   # architecture choice
+├── data_source/             # dataset definitions
+├── toy_function/            # allows to construct different parametric functions
 ├── training/                # epochs, batch size, metrics, early stopping
-├── optimizer/               # adam/adamw + schedulers (cosine, plateau, onecycle, clipping)
+├── optimizer/               # adam/adamw + schedulers
 ├── loss/                    # l2.yaml | combined.yaml
 ├── preprocessing/           # turbulence dataset split & normalization
 └── postprocessing/          # which plots to generate
 ```
 
-The `problem` group is the *controller*: selecting `problem=toy` or `problem=turbulence` pulls in a
-consistent set of `data_source`, `training`, `model` and `postprocessing` defaults, so the two workloads
-never get mixed up.
+The `problem` group is the *controller*: selecting `problem=toy` or `problem=turbulence` pulls in a set of `data_source`, `training`, `model` and `postprocessing` defaults consistent with the selected problem, so that the two workflows never get mixed.
 
-### 3.2 Instantiation from config (`_target_`)
 
-Objects are built directly from YAML via Hydra's `_target_` mechanism. The model, for instance, is a
-DAG of blocks declared entirely in `config/model/*.yaml`:
+## 4. Reproducibility: How to run code and tests
 
-```yaml
-hyper_block:
-  _target_: models.Hypernetwork
-  network:
-    _target_: models.MLP
-    num_neurons: [${model.num_hypervariables}, 64, 64, 128]
-  input: hypervars
-  output: latent_features
-```
+To use our library and reproduce the results we provide two alternatives:
+1. a local **`uv`** environment
+2. a pre-built **Docker** image (Option B)
 
-Changing the depth or width of any network, swapping a SIREN target for an MLP, or rewiring the blocks
-is therefore a *configuration* change, not a *code* change.
+Both are driven by the same `Makefile`, the only difference is the value of the `ENGINE` variable (`venv` or `docker`) and that:
 
-### 3.3 Custom resolvers
-
-The library registers several **custom OmegaConf resolvers** (`utils/hydra_resolvers.py`,
-`register_resolvers()`) that make the configs adaptive:
-
-| Resolver | Meaning |
-| --- | --- |
-| `${len:<list>}` | length of a list — e.g. `num_variables: ${len:${data_source.base_toy.var_domains}}` derives the input dimension straight from the domain definition. |
-| `${sum:[a, b]}` | numeric sum — used to derive distinct seeds for train/val/test. |
-| `${int_product:a, b}` | integer product — e.g. validation size as 20 % of the training size. |
-| `${product:...}` | `math.prod` over its arguments. |
-| `${compute_train_steps:epochs, N, batch}` | total optimizer steps, fed to the LR scheduler. |
-| `${ho_func:wrapper, inner}` | composes higher-order functions (e.g. `optax.inject_hyperparams(optax.adamw)`) so hyper-parameters such as the learning rate can be logged live. |
-
-Because of these resolvers, you can change, say, the number of toy variables and every dependent
-dimension updates automatically.
-
-### 3.4 Overriding from the command line
-
-Any leaf can be set at launch time. Throughout this README overrides are passed via the `OVERRIDES`
-variable of the `Makefile`:
-
-```bash
-make run-local OVERRIDES="problem=toy model=toy_mlp training.epochs=500 use_wandb=true"
-```
-
-Each run's fully-resolved config is saved under `results/.../.hydra/`, so an experiment can always be
-reproduced exactly.
-
----
-
-## 4. How to run code and tests
-
-To use our library and reproduce the results we provide two alternatives: a local **`uv`** environment
-(Option A) and a pre-built **Docker** image (Option B). Both are driven by the same `Makefile`; the only
-difference is the value of the `ENGINE` variable (`venv` or `docker`).
+* **Docker Image:** Recommended for immediate reproduction. It arrives fully self-contained with all required datasets and model checkpoints pre-installed. No external setup or downloads are required.
+* **Local Setup (`uv`):** Requires you to manually load and place the datasets and checkpoints before running execution commands, as the local clone only contains the source code. This happens because hosting large binaries in Git violates repository best practices
 
 ### CPU / GPU flag
 
 The execution device is selected with the `USE_GPU` flag of the `Makefile` (`true` / `false`, default
-`false`). JAX is installed with CUDA 12 support, but **the library always runs on CPU as a fallback**:
+`false`). JAX is installed with CUDA 12 support.
 
 - If you set `USE_GPU=true` but no NVIDIA driver/hardware is detected, `run_experiment.sh` prints a
-  hardware warning and **safely reverts to CPU** — the run still proceeds.
+  hardware warning and **safely reverts to CPU**.
 - Independently, `main.py` sets `JAX_PLATFORMS=cpu` whenever no GPU device is visible, so JAX itself
   never errors out.
 
-The toy problem is small and is best run on CPU; the turbulence problem benefits from a GPU.
+The toy problem is small and is best run on CPU, while the turbulence problem benefits from a GPU.
 
 ### Option A: run locally using a `uv` environment
 
@@ -197,12 +147,11 @@ The toy problem is small and is best run on CPU; the turbulence problem benefits
    uv pip install -r requirements.txt
    ```
 
-6. *(Turbulence only)* Load the astrophysical turbulence dataset from Hugging Face and run the provided
-   preprocessing scripts:
+6. *(Turbulence only)* Load the astrophysical turbulence dataset from Hugging Face and run the provided preprocessing scripts:
    ```bash
    make load-data
    ```
-   The toy problem needs no download — its data is generated on the fly.
+   The toy problem needs no download: its data is generated on the fly.
 
 7. *(Optional)* Download the pre-trained checkpoints used by the demonstration tests, from our
    `v1.0.0` GitHub release:
@@ -211,8 +160,9 @@ The toy problem is small and is best run on CPU; the turbulence problem benefits
    unzip checkpoints.zip
    rm checkpoints.zip
    ```
+   **NOTE:** this step is mandatory if you want to run provided tests.
 
-8. Set the `ENGINE` environment variable to `venv`:
+8. Set the `ENGINE` environment variable to `venv` once for all:
    ```bash
    export ENGINE="venv"
    ```
@@ -243,9 +193,9 @@ yourself.
    ```bash
    docker pull leonardobocchieri/jax-hypernetworks:latest
    ```
-   > **NOTE:** the image is ≈ 4 GB, so this step can take a few minutes.
+   > **NOTE:** the image is approximately 10 GB, so this step can take a few minutes.
 
-4. Set the `ENGINE` environment variable to `docker`:
+4. Set the `ENGINE` environment variable to `docker` (once and for all):
    ```bash
    export ENGINE="docker"
    ```
@@ -255,20 +205,16 @@ yourself.
    make run-local
    ```
 
-> **How the Docker engine works — what is baked in vs. mounted.** The image *bakes in* the whole
-> **library** code (`models/`, `training/`, `losses/`, …) together with all dependencies. At run time
-> `run_experiment.sh` only **bind-mounts** the parts you actually edit between experiments —
-> `config/`, `main.py` and `results/` — from your local clone into the container. The `Makefile` and the
-> `scripts/` themselves run on the *host* and merely orchestrate the `docker run` call. The practical
-> consequence: editing a config or `main.py` locally takes effect immediately inside the container, while
-> the library modules come from the image. You see all folders in your clone, but the container relies on
-> its own baked-in copies of the library.
+> **How the Docker engine works: what is baked in vs. mounted.** The image *contains* the
+> **library** code that needs to be kept unchanged (together with all dependencies).
+> It is important to notice that `run_experiment.sh` **bind-mounts** the parts you actually edit between experiments:
+> `config/`, `main.py` and `results/`. They are therefore taken from your local clone into the container. 
+> The `Makefile` and the `scripts/` themselves run on the *host* and merely orchestrate the `docker run` call.
+> The practical consequence: modifying a configuration file or `main.py` locally takes effect immediately inside the container. However, modifying local library files (such as the `models/` directory) will have **no effect** on execution, because the container strictly executes the library copies baked into the Docker image.
 
 > **Ownership note.** Files created from inside the container belong to `root`. If you later run locally
 > and hit a permission error, reclaim ownership with `sudo chown -R $(whoami) results`.
 
-For a step-by-step Docker setup (including **WSL 2** on Windows) and instructions on building/publishing
-the image yourself, see [DOCKER_TUTORIAL.md](DOCKER_TUTORIAL.md).
 
 ---
 
