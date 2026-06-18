@@ -30,19 +30,12 @@ Both experiments run with the same underlying code. This flexibility is mainly p
 A **hypernetwork** is a neural network whose output is the set of weights of a second network, the
 **target network**. In this library the data flow is always the same:
 
-```
-hypervariables (θ)  ──►  Hypernetwork  ──►  latent features
-                                                 │
-                                                 ▼
-                                          Projection head(s)  ──►  generated weights
-                                                                         │
-   variables (x)  ───────────────────────────────────────────►  Target network  ──►  output
-```
+![Diagram Description](./assets/SIREN_hypernetwork.png)
 
-- **Hypervariables (`θ`)** are the parameters given as inputs to the *hypernetwork*.
+- **Hypervariables (`z`)** are the parameters given as inputs to the *hypernetwork*.
 - **Variables (`x`)** are the parameters given as inputs to the *target network*.
 - General pipeline:
-    1. The **Hypernetwork** maps `θ` to a latent code
+    1. The **Hypernetwork** maps `z` to a latent code
     2. The **projection heads** expand that code into the actual kernels and biases of the target network
     3. The **target network** consumes `x` with those generated weights and produces the prediction.
 

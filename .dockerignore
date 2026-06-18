@@ -32,3 +32,4 @@ config/
 main.py
 scripts/
 Makefile
+assets/
