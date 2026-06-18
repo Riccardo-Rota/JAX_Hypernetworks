@@ -50,7 +50,7 @@ run-test4:
 
 run-test5:
 	@echo "=== Compare training speed with and without jit compilation ==="
-	ENGINE=$(ENGINE) bash scripts/jit_comparison.sh
+	ENGINE=$(ENGINE) RUN_DIR=results/test5_jit_comparison bash scripts/jit_comparison.sh
 
 run-test6:
 	@echo "=== Load a pre-trained model for turbulence and inspect results ==="
