@@ -26,3 +26,10 @@ results_cluster/
 CLUSTER_TUTORIAL.md
 DOCKER_TUTORIAL.md
 notebooks/
+LICENSE
+README.md
+config/
+main.py
+scripts/
+Makefile
+requirements.txt
