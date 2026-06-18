@@ -16,13 +16,12 @@ Both experiments run with the same underlying code. This flexibility is mainly p
 1. [General Idea](#1-general-idea)
 2. [Repository structure](#2-repository-structure)
 3. [Hydra](#3-hydra)
-4. [Reproducibility: How to run code and tests](#4-reproducibility-how-to-run-code-and-tests)
-5. [The guided tour: `make run-test*`](#5-the-guided-tour-make-run-test)
+4. [Setup](#4-setup)
+5. [How to run tests](#5-how-to-run-tests)
 6. [General usage](#6-general-usage)
 7. [Datasets](#7-datasets)
 8. [Weights & Biases](#8-weights--biases)
 9. [Running on an HPC cluster](#9-running-on-an-hpc-cluster)
-10. [Troubleshooting & notes](#10-troubleshooting--notes)
 
 ---
 
@@ -95,16 +94,16 @@ config/
 The `problem` group is the *controller*: selecting `problem=toy` or `problem=turbulence` pulls in a set of `data_source`, `training`, `model` and `postprocessing` defaults consistent with the selected problem, so that the two workflows never get mixed.
 
 
-## 4. Reproducibility: How to run code and tests
+## 4. Setup
 
 To use our library and reproduce the results we provide two alternatives:
 1. a local **`uv`** environment
-2. a pre-built **Docker** image (Option B)
+2. a pre-built **Docker** image
 
-Both are driven by the same `Makefile`, the only difference is the value of the `ENGINE` variable (`venv` or `docker`) and that:
+Both are driven by the same `Makefile`, the only difference is the value of the `ENGINE` variable (`venv` or `docker`) and the fact that:
 
 * **Docker Image:** Recommended for immediate reproduction. It arrives fully self-contained with all required datasets and model checkpoints pre-installed. No external setup or downloads are required.
-* **Local Setup (`uv`):** Requires you to manually load and place the datasets and checkpoints before running execution commands, as the local clone only contains the source code. This happens because hosting large binaries in Git violates repository best practices
+* **Local Setup:** Requires you to manually load and place the datasets and checkpoints before running execution commands, as the local clone only contains the source code. This happens because hosting large binaries in Git violates repository best practices
 
 ### CPU / GPU flag
 
@@ -168,11 +167,7 @@ The toy problem is small and is best run on CPU, while the turbulence problem be
    ```
 
 9. **Run the code.** You can now run experiments and the provided tests through the `Makefile`:
-   ```bash
-   make run-local
-   ```
-   See [§5](#5-the-guided-tour-make-run-test) for the test suite and [§6](#6-general-usage) for general
-   usage.
+   To run the provided tests, see section [§5](#5-how-to-run-tests), while for general usage go to [§6](#6-general-usage).
 
 ### Option B: run with the Docker image
 
@@ -200,10 +195,8 @@ yourself.
    export ENGINE="docker"
    ```
 
-5. **Run the code** exactly as in Option A, through the `Makefile`:
-   ```bash
-   make run-local
-   ```
+5. **Run the code.** You can now run experiments and the provided tests through the `Makefile`:
+   To run the provided tests, see section [§5](#5-how-to-run-tests), while for general usage go to [§6](#6-general-usage).
 
 > **How the Docker engine works: what is baked in vs. mounted.** The image *contains* the
 > **library** code that needs to be kept unchanged (together with all dependencies).
@@ -212,43 +205,37 @@ yourself.
 > The `Makefile` and the `scripts/` themselves run on the *host* and merely orchestrate the `docker run` call.
 > The practical consequence: modifying a configuration file or `main.py` locally takes effect immediately inside the container. However, modifying local library files (such as the `models/` directory) will have **no effect** on execution, because the container strictly executes the library copies baked into the Docker image.
 
-> **Ownership note.** Files created from inside the container belong to `root`. If you later run locally
-> and hit a permission error, reclaim ownership with `sudo chown -R $(whoami) results`.
-
+> **Ownership note.** Files created from inside the container belong to `root` (specifically, the `results/` folder). If you later run locally and hit a permission error, reclaim ownership with `sudo chown -R $(whoami) results`.
 
 ---
 
-## 5. The guided tour: `make run-test*`
+## 5. How to run tests
 
-The `Makefile` ships a sequence of **self-documenting demonstrations** that walk through the library's
-capabilities, from inspecting a pre-trained model to comparing JIT compilation speed-ups. Run them with
-your chosen engine already exported (`export ENGINE=venv` or `docker`). Each writes its output under a
-dedicated `results/...` directory.
+> Before proceeding, follow instructions in section [§4](#5-setup)
+
+The `Makefile` provides a sequence of **experimental tests** that shows the library capabilities. Each writes its output under a dedicated `results/...` directory.
 
 | Target | What it demonstrates |
 | --- | --- |
-| **`make run-test1`** | **Inference from a good checkpoint.** Loads a pre-trained toy MLP (`train_model=false`) and produces prediction and metric reports — the model fits the target function well. |
-| **`make run-test2`** | **Training from scratch: the SIREN initialization matters.** Trains a *naive* SIREN (poor initialization → poor fit), then a properly-initialized SIREN — illustrating why SIREN's weight scheme is essential for high-frequency targets. |
-| **`make run-test3`** | **Fine-tuning a checkpoint.** First loads a deliberately under-trained checkpoint (poor results), then resumes training (`train_model=true`) from those same weights to show the model recovering. |
-| **`make run-test4`** | **A challenging target.** Trains a SIREN on a high-frequency sine wave (`toy_function=highfreq_sine`), stress-testing the method on a hard signal. |
-| **`make run-test5`** | **JIT vs. no-JIT.** Runs the same short training twice — with and without JAX JIT compilation (`JAX_DISABLE_JIT=1`) — on CPU and prints the measured speed-up. |
-| **`make run-test6`** | **Turbulence inference (MLP).** Loads a pre-trained turbulence MLP and reconstructs the velocity fields, comparing prediction against ground truth. *Requires the turbulence dataset (`make load-data`).* |
-| **`make run-test7`** | **Turbulence inference (SIREN).** Same as test 6 but with a SIREN target on the *density* field. *Requires the turbulence dataset.* |
-
-These targets double as **usage recipes**: each one is simply a `make run-local` call with a specific
-`OVERRIDES` string, so reading the `Makefile` shows exactly how to compose your own experiments.
+| **`make run-test1`** | **(TOY) Inference from a good checkpoint.** Loads a pre-trained MLP (`train_model=false`) and produces prediction and metric reports. The model should fit the target function well. |
+| **`make run-test2`** | **(TOY) Training from scratch: the SIREN initialization matters.** Trains a *naive* SIREN (poor initialization → poor fit), then a properly-initialized SIREN. This illustrates why SIREN's weight scheme is essential for high-frequency targets. |
+| **`make run-test3`** | **(TOY) Fine-tuning a checkpoint.** First loads a deliberately under-trained checkpoint (poor results), then resumes training (`train_model=true`) from those same weights to show the model recovering. |
+| **`make run-test4`** | **(TOY) A challenging target.** Trains a SIREN on a high-frequency sine wave (`toy_function=highfreq_sine`). This illustrates how SIREN architectures perform well on high-frequency signals. |
+| **`make run-test5`** | **(PERFORMANCE) JIT vs. no-JIT.** Runs the same short training twice — with and without JAX JIT compilation (`JAX_DISABLE_JIT=1`) — on CPU and prints the measured speed-up. |
+| **`make run-test6`** | **(TURBULENCE) Inference with MLPs.** Loads a pre-trained turbulence MLP and reconstructs the velocity fields, comparing prediction against ground truth. *Requires the turbulence dataset (`make load-data`).* |
+| **`make run-test7`** | **(TURBULENCE) Inference with SIRENs.** Same as test 6 but with a SIREN target on the *density* field. *Requires the turbulence dataset (`make load-data`).* |
 
 ---
 
 ## 6. General usage
 
-Every experiment is launched through `make run-local`, which accepts three knobs:
+The library allows to run personalized experiments. Every experiment is launched through `make run-local`, which accepts three knobs:
 
 ```bash
 make run-local USE_GPU=<true|false> ENGINE=<venv|docker> OVERRIDES="<hydra overrides>"
 ```
 
-- **`ENGINE`** — `venv` (local interpreter) or `docker`. Defaults to `venv`.
+- **`ENGINE`** — `venv` (local interpreter) or `docker`.
 - **`USE_GPU`** — `true` or `false` (default `false`). See the [CPU/GPU flag](#cpu--gpu-flag) note above.
 - **`OVERRIDES`** — any space-separated list of Hydra overrides. Alternatively, edit the files in
   `config/` directly.
@@ -256,22 +243,31 @@ make run-local USE_GPU=<true|false> ENGINE=<venv|docker> OVERRIDES="<hydra overr
 Full example:
 
 ```bash
-make run-local USE_GPU=true OVERRIDES="problem=toy model=toy_siren training.epochs=1000 use_wandb=true"
+make run-local USE_GPU=true OVERRIDES="problem=toy model=toy_siren training.epochs=1000"
 ```
 
 ### Phases: what actually runs
 
 `main.py` executes up to three phases, each controlled by a boolean flag (overridable):
 
-- `train_model=true` — train and checkpoint the model.
-- `test_model=true` — evaluate metrics on the test set.
-- `plot_inference=true` — generate the post-processing figures.
+- `train_model=true`: train and checkpoint the model.
+- `test_model=true`: evaluate metrics on the test set.
+- `plot_inference=true`: generate the post-processing figures.
 
 To merely inspect a checkpoint, set `train_model=false checkpoint='checkpoints/<name>'`, exactly as the
 demonstration tests do.
 
-On GPU you may see one-off **XLA autotuning warnings** during compilation — these are harmless (see
-[§10](#10-troubleshooting--notes)).
+
+> When running on GPU you may see repeated lines such as:
+> 
+> ```
+> W external/xla/.../dot_search_space.cc:200] All configs were filtered out because none of them
+> sufficiently match the hints. ... Working around this by using the full hints set instead.
+> ```
+> 
+> **These are warnings, not errors** — the run is fine. The warning concerns only how XLA chose the kernel
+> and it happens once, during compilation. It depends on your GPU and JAX version, so it may not show up on
+> every machine. To silence them, set `TF_CPP_MIN_LOG_LEVEL=2` before launching.
 
 ---
 
@@ -297,29 +293,35 @@ on Hugging Face). `make load-data` runs two steps:
    writes `turbulence_dataset_{train,val,test}.hdf5` into `datasets/`.
 
 At run time `InMemoryHDF5Source` loads the relevant split fully into RAM. The fields, coordinates and
-prediction targets (`density`, `pressure`, `velocity_x`, `velocity_y`, …) are declared in
-`config/data_source/turbulence.yaml` and can be remapped from the command line — e.g.
-`data_source.base_dataset.target_keys=['density']`.
+prediction targets (`density`, `pressure`, `velocity_x`, `velocity_y`) are declared in
+`config/data_source/turbulence.yaml` and can be remapped from the command line.
+
+### Personalized Dataset
+
+Integrating a custom dataset requires no changes to the underlying Python codebase. You only need to provide pre-split `.hdf5` files and map their structure using a YAML configuration.
+
+**1. Data Placement**
+Place your `.hdf5` files directly into the `datasets/` folder. Your data must already be divided into training, validation and test splits (e.g., `custom_train.hdf5`, `custom_val.hdf5`, `custom_test.hdf5`).
+
+**2. Configuration Mapping**
+Create a new YAML file inside `config/data_source/` (e.g., `custom_data.yaml`). This file dictates how the data loader parses your `.hdf5` columns. You must define a `schema` that maps your dataset's variable names to their exact column indices. Using those names, you then categorize the columns into hypervariables (`hypervar_keys`), physical coordinates/inputs (`var_keys`), and prediction targets (`target_keys`). Check `config/data_source/turbulence.yaml` to have a deeper insight.
+
 
 ---
 
 ## 8. Weights & Biases
 
-The project integrates with [Weights & Biases](https://wandb.ai) for live monitoring and logging, but
-**W&B is entirely optional and disabled by default** (`use_wandb=false`). To turn it on, add
-`use_wandb=true` to your overrides — and make sure your project/entity are set:
+The project integrates with [Weights & Biases](https://wandb.ai) for live monitoring and logging. It is disabled by default, but it can be turned on by adding `use_wandb=true` to overrides. Make sure `wandb_settings` are set, either editing `config/config.yaml` file or with:
 
 ```bash
 make run-local OVERRIDES="problem=toy use_wandb=true wandb_settings.project=my_project wandb_settings.entity=my_team"
 ```
 
-When enabled, the run uploads its metrics, the fully-resolved config and every generated figure, and
-names the run after its problem/date/time.
 
 ### Authentication
 
 Generate an API key from your W&B account and store it securely in a `~/.netrc` file in your home
-directory (the same file works on both your local terminal and a cluster login node):
+directory:
 
 ```bash
 touch ~/.netrc
@@ -337,8 +339,7 @@ machine api.wandb.ai
 *(Replace `<your_API_key>` with your actual 40-character Weights & Biases token. Do not change the word
 `user`.)*
 
-`run_experiment.sh` parses this file automatically: if a key is found it logs you in; if not, it forces
-**offline** mode so a run never blocks on a login prompt.
+`run_experiment.sh` parses this file automatically: if a key is found it logs you in; if not, it forces **offline** mode so a run never blocks on a login prompt.
 
 ### Syncing offline runs
 
@@ -348,15 +349,12 @@ Runs produced offline (typically on a cluster) can be uploaded afterwards:
 RESULTS_DIR=results/runs_turbulence make sync-cluster
 ```
 
-This walks the results tree for `offline-run-*` directories and `wandb sync`s them in parallel through
-the apptainer image.
-
 ---
 
-## 9. Running on an HPC cluster
+## 9. Running on an HPC cluster (ONLY FOR USERS FROM POLITECNICO DI MILANO)
 
-For long or GPU-heavy jobs, the library runs on an HPC cluster via **apptainer** (the HPC-friendly
-counterpart of Docker) and the **PBS** scheduler.
+For long or GPU-heavy jobs, the library runs on an HPC cluster via **apptainer** (an open-source container platform
+designed to run on HPC systems) and the **PBS** scheduler.
 
 1. Clone the repository on the cluster (preferably under your `work` space).
 2. Convert the Docker image to an apptainer `.sif`:
@@ -370,10 +368,7 @@ counterpart of Docker) and the **PBS** scheduler.
    make submit-cluster USE_GPU=true OVERRIDES="problem=turbulence use_wandb=true training.epochs=500"
    ```
 
-The PBS script (`scripts/submission.pbs`) stages the code onto fast local scratch, mirrors results back
-to your submission directory every minute (so you can `tail -f` the live log), and rescues all output on
-exit. A complete walk-through — VPN, SSH, queue monitoring, retrieving results — is in
-[CLUSTER_TUTORIAL.md](CLUSTER_TUTORIAL.md).
+For other relevant informations, consult the student cluster guidelines on Webeep.
 
 ### Watching logs live on the cluster
 
@@ -388,35 +383,6 @@ tail -F <path_to_log>
 
 ---
 
-## 10. Troubleshooting & notes
-
-### XLA autotuning warnings (GPU)
-
-When running on GPU you may see repeated lines such as:
-
-```
-W external/xla/.../dot_search_space.cc:200] All configs were filtered out because none of them
-sufficiently match the hints. ... Working around this by using the full hints set instead.
-```
-
-**These are warnings, not errors** — the run is fine. The warning concerns only how XLA chose the kernel
-and it happens once, during compilation. It depends on your GPU and JAX version, so it may not show up on
-every machine. To silence them, set `TF_CPP_MIN_LOG_LEVEL=2` before launching.
-
-### Permissions after a Docker run
-
-Files written from inside the container belong to `root`. Reclaim them with:
-
-```bash
-sudo chown -R $(whoami) results
-```
-
-### Further reading
-
-- [DOCKER_TUTORIAL.md](DOCKER_TUTORIAL.md) — building, testing and publishing the Docker image (incl. WSL 2).
-- [CLUSTER_TUTORIAL.md](CLUSTER_TUTORIAL.md) — end-to-end guide to the POLIMI HPC cluster.
-
----
 
 ## License
 
