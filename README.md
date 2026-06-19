@@ -23,9 +23,10 @@ Both experiments run with the same underlying code. This flexibility is mainly p
 4. [Setup](#4-setup)
 5. [How to run tests](#5-how-to-run-tests)
 6. [General usage](#6-general-usage)
-7. [Datasets](#7-datasets)
-8. [Weights & Biases](#8-weights--biases)
-9. [Running on an HPC cluster](#9-running-on-an-hpc-cluster)
+7. [Inspecting Results](#7-inspecting-results)
+8. [Datasets](#8-datasets)
+9. [Weights & Biases](#9-weights--biases)
+10. [Running on an HPC cluster](#10-running-on-an-hpc-cluster)
 
 ---
 
@@ -140,7 +141,7 @@ Both are driven by the same `Makefile`, the only difference is the value of the 
    The toy problem needs no download: its data is generated on the fly.
 
 7. *(Optional)* Download the pre-trained checkpoints used by the demonstration tests, from our
-   `v1.0.2` GitHub release:
+   `v1.0.4` GitHub release:
    ```bash
    wget https://github.com/Riccardo-Rota/JAX_Hypernetworks/releases/download/v1.0.2/checkpoints.zip
    unzip checkpoints.zip
@@ -213,7 +214,7 @@ The toy problem is small and is best run on CPU, while the turbulence problem be
 
 > Before proceeding, follow instructions in section [§4](#4-setup)
 
-The `Makefile` provides a sequence of **experimental tests** that shows the library capabilities. Each writes its output under a dedicated `results/...` directory.
+The `Makefile` provides a sequence of **experimental tests** that show the library capabilities. Each writes its output under a dedicated `results/...` directory. To understand how to read results, read Section [§7](#7-inspecting-results)
 
 | Target | What it demonstrates |
 | --- | --- |
@@ -271,7 +272,23 @@ demonstration tests do.
 
 ---
 
-## 7. Datasets
+## 7. Inspecting Results
+
+Results are saved in the `results/` folder, which is structured as follows:
+
+| Path | What it contains |
+| --- | --- |
+| **`.hydra/`** | The YAML files with all the configuration settings used for that specific run. |
+| **`.checkpoints/`** | Model checkpoints folders. |
+| **`.figures/`** | Plots and Loss curves in PNG format. |
+| **`default.log`** | CLI output prints. |
+| **`run:data.json`** | General results for metrics, earely stopping, best epoch and training history. |
+| **`training_log.txt`** | Training log with metrics and results after each epoch. |
+
+
+---
+
+## 8. Datasets
 
 ### Toy
 
@@ -309,7 +326,7 @@ Create a new YAML file inside `config/data_source/` (e.g., `custom_data.yaml`). 
 
 ---
 
-## 8. Weights & Biases
+## 9. Weights & Biases
 
 The project integrates with [Weights & Biases](https://wandb.ai) for live monitoring and logging. It is disabled by default, but it can be turned on by adding `use_wandb=true` to overrides. Make sure `wandb_settings` are set, either editing `config/config.yaml` file or with:
 
@@ -351,7 +368,7 @@ RESULTS_DIR=results/runs_turbulence make sync-cluster
 
 ---
 
-## 9. Running on an HPC cluster
+## 10. Running on an HPC cluster
 
 > This section concerns Politecnico di Milano cluster. If you do not have access to it, you can skip the reading.
 
