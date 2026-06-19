@@ -19,12 +19,24 @@ base_dataset: &base_dataset
 
 train:
   <<: *base_dataset
+  hypervar_keys: ${data_source.base_dataset.hypervar_keys}
+  var_keys: ${data_source.base_dataset.var_keys}
+  target_keys: ${data_source.base_dataset.target_keys}
+  var_bounds: ${data_source.base_dataset.var_bounds}
   hdf5_path: ${dataset_root}/${preprocessing.data.base_name}_train.hdf5
 
 val:
   <<: *base_dataset
+  hypervar_keys: ${data_source.base_dataset.hypervar_keys}
+  var_keys: ${data_source.base_dataset.var_keys}
+  target_keys: ${data_source.base_dataset.target_keys}
+  var_bounds: ${data_source.base_dataset.var_bounds}
   hdf5_path: ${dataset_root}/${preprocessing.data.base_name}_val.hdf5
 
 test:
   <<: *base_dataset
+  hypervar_keys: ${data_source.base_dataset.hypervar_keys}
+  var_keys: ${data_source.base_dataset.var_keys}
+  target_keys: ${data_source.base_dataset.target_keys}
+  var_bounds: ${data_source.base_dataset.var_bounds}
   hdf5_path: ${dataset_root}/${preprocessing.data.base_name}_test.hdf5
