@@ -35,7 +35,7 @@ sync-cluster:
 
 run-test1:
 	@echo "=== Inspect the results of a pre-trained model which performs well ==="
-	$(MAKE) run-local OVERRIDES="problem=toy model=toy_siren train_model=false checkpoint='checkpoints/toy_siren' hydra.run.dir='results/test1'"
+	$(MAKE) run-local OVERRIDES="problem=toy model=toy_mlp train_model=false checkpoint='checkpoints/toy_mlp' hydra.run.dir='results/test1'"
 
 run-test2:
 	@echo "=== Train a naive SIREN from scratch (performs poorly), inspect results ==="
@@ -59,8 +59,8 @@ run-test5:
 
 run-test6:
 	@echo "=== Load a pre-trained model for turbulence and inspect results ==="
-	$(MAKE) run-local OVERRIDES="problem=turbulence model=turbulence_siren train_model=false checkpoint='checkpoints/velocity_siren' hydra.run.dir='results/test6'"
+	$(MAKE) run-local OVERRIDES="problem=turbulence model=turbulence_mlp train_model=false checkpoint='checkpoints/velocity_mlp' hydra.run.dir='results/test6'"
 
 run-test7:
 	@echo "=== Load a pre-trained model for turbulence and inspect results ==="
-	$(MAKE) run-local OVERRIDES="problem=turbulence model=turbulence_mlp train_model=false checkpoint='checkpoints/density_mlp' data_source.base_dataset.target_keys=['density'] hydra.run.dir='results/test7'"
+	$(MAKE) run-local OVERRIDES="problem=turbulence model=turbulence_siren train_model=false checkpoint='checkpoints/density_siren' data_source.base_dataset.target_keys=['density'] hydra.run.dir='results/test7'"
